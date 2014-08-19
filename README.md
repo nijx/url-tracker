@@ -109,12 +109,12 @@ By default, the application will expect to connect to an Aerospike Server runnin
 
 ##Application Data
 When the application is data driven (data read from the input file), the data file has the following format:
-```
+```JSON
 {
     "command_file": "data file name",
     "commands" : [ {"command element"}, {"command element"} ]
 }
-
+```
 There are several commands ("command element" instances) that are used for inserting, querying, expiring and removing data:
 
 - Create New Customer ("new_customer")
@@ -129,7 +129,8 @@ There are several commands ("command element" instances) that are used for inser
 
 ## Data File Example
 
-```
+
+```JSON
 {
     "command_file": "DataFile_1",
     "commands": [
