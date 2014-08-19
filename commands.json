@@ -1,0 +1,126 @@
+{
+    "command_file": "test_2",
+    "commands": [
+        {
+            "command": "new_user",
+            "user": {
+                "name": "Bob",
+                "email": "bob@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+	},
+        {
+            "command": "new_user",
+            "user": {
+                "name": "Sue",
+                "email": "sue@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+	},
+        {
+            "command": "new_user",
+            "user": {
+                "name": "Joe",
+                "email": "joe@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+        },
+	{
+            "command": "new_user",
+            "user": {
+                "name": "Rick",
+                "email": "rick@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+        },
+        {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Bob",
+                "url": "www.aerospike.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5000,
+                "expire": 6000
+            }
+        },
+        {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Sue",
+                "url": "www.aerospike.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5001,
+                "expire": 6001
+            }
+        },
+        {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Sue",
+                "url": "www.microsoft.com",
+                "referrer": "xyz",
+                "page_title": "1a2b3c",
+                "ip_address": "1.2.3.4",
+                "date": 5010,
+                "expire": 6010
+            }
+        },
+        {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Bob",
+                "url": "www.google.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5020,
+                "expire": 6020
+            }
+        },
+        {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Rick",
+                "url": "www.aerospike.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5000,
+                "expire": 6000
+            }
+        },
+        {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Bob",
+                "url": "www.aerospike.com/documentation",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5030,
+                "expire": 6030
+            }
+        },
+        {
+            "command": "query_user",
+            "user": "Bob"
+        },
+        {
+            "command": "remove_expired",
+            "user": "Bob",
+            "expire": 5500
+        }
+    ]
+}
