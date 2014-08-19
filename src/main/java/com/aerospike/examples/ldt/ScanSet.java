@@ -55,7 +55,6 @@ public class ScanSet implements ScanCallback {
 		return recordList;
 	}
 
-	@Override
 	public void scanCallback(Key key, Record record) {
 		recordCount++;
 		

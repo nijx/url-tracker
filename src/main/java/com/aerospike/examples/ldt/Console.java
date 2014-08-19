@@ -71,7 +71,6 @@ public class Console implements Log.Callback {
 		System.out.println(message);
 	}
 
-	@Override
 	public void log(Level level, String message) {
 		write(level, message);
 	}
