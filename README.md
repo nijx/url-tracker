@@ -1,16 +1,17 @@
 #URL Tracker Example
 
-This example shows two different ways to manage a collection of "site-visit"
-values that correspond to user data.
-
 ## Overview
+
+This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit"
+values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.
+
+## Introduction
 
 In the Aerospike Database, customer data is kept in a set.   There are many
 sets -- one for each customer.  In each customer set, there are user records.
 Each user record describes a user.
-In each user record, there is a collection of site-visit information that
-pertains to a user.  The site-visit data collection is managed by an Aerospike
-Large Data Type (LDT).
+In each user record, besides the user data, there is a collection of site-visit information that pertains to a user.
+The site-visit data collection is managed by an Aerospike Large Data Type (LDT).
 
 The overall data schema is as follows:
 
@@ -41,7 +42,7 @@ The overall data schema is as follows:
        |                  |                       V                 |    |    |
        |                  V                    +---------------+    |    |    |
        |               +------------+         +---------------+|    |    |    |
-       |               |Info Object |        +---------------+||    |    |    |
+       |               |Info Data   |        +---------------+||    |    |    |
        |               |------------|        |Site Visit Data|||    |    |    |
        |               |* User Name |        |---------------|||    |    |    |
        |               |* Email     |        |* URL          |||    |    |    |
@@ -69,9 +70,9 @@ There are five main operations:
 5. Remove all entries that have an expire time < current time.
 
 There are several additional (supportive) operations:
-(*) Query all records in the customer set
-(*) Remove a record (by key)
-(*) Remove all records in a customer set
+* Query all records in the customer set
+* Remove a record (by key)
+* Remove all records in a customer set
 
 
 ##Problem
@@ -89,4 +90,174 @@ The source code for this solution is available on GitHub, and the README.md
 http://github.com/some place. 
 
 
-##Discussion
+##The Example Application Invocation
+
+The application is a Java application, built as a Maven Project.  It can be run inside eclipse (a common choice while developing) or as a stand-alone program using the generated jar file.  The main class is **UrlTracker** and the main function is `main()`.
+
+The application can be started with the following options:
+
+* -h  "host"      Name or IP address of AS Node (default:  localhost)
+* -p  "port"      Port number of AS Node (default: 3000)
+* -n  "namespace  AS Namespace (default: test)
+* -s  "set"       AS Set Name (default: demo)
+* -u              Print usage options
+* -f  "filename", Input FileName (default: commands.json)
+* -t "LDT type"   LDT Name for Site-Visit Collection (default: LLIST)
+* -g              Generate Data (overrides "-f" option])
+
+By default, the application will expect to connect to an Aerospike Server running locally (localhost), at port 3000, using namespace "test" and set "demo", reading data from a local file called "commands.json" and using Large Ordered List (LLIST) to manage the site-visit collection.
+
+##Application Data
+When the application is data driven (data read from the input file), the data file has the following format:
+```
+{
+    "command_file": "data file name",
+    "commands" : [ {"command element"}, {"command element"} ]
+}
+
+There are several commands ("command element" instances) that are used for inserting, querying, expiring and removing data:
+
+- Create New Customer ("new_customer")
+- Create New User ("new_user")
+- Append a new Site-Visit ("new_site_visit")
+- Query User ("query_user"): Show all site-visit data for a user.
+- Query Customer Set ("query_set"): Show all records in a customer set.
+- Remove Expired Site Visit Entries ("remove_expired"): For a given expiration value, remove all site visit data that is older than the expiration value
+- Remove Record ("remove_record"): Remove a record based on a record key.
+- Remove All Records ("remove_all_records"): Remove all records from a given customer set.
+
+
+## Data File Example
+
+```
+{
+    "command_file": "DataFile_1",
+    "commands": [
+    {
+            "command": "new_user",
+            "user": {
+                "name": "Bob",
+                "email": "bob@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+	},
+    {
+            "command": "new_user",
+            "user": {
+                "name": "Sue",
+                "email": "sue@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+	},
+    {
+            "command": "new_user",
+            "user": {
+                "name": "Joe",
+                "email": "joe@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+    },
+	{
+            "command": "new_user",
+            "user": {
+                "name": "Rick",
+                "email": "rick@www.aerospike.com",
+                "phone": "(408) 555-1234",
+                "address": "1313 Mockingbird Lane",
+                "company": "aerospike"
+            }
+    },
+    {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Bob",
+                "url": "www.aerospike.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5000,
+                "expire": 6000
+            }
+    },
+    {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Sue",
+                "url": "www.aerospike.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5001,
+                "expire": 6001
+            }
+    },
+    {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Sue",
+                "url": "www.microsoft.com",
+                "referrer": "xyz",
+                "page_title": "1a2b3c",
+                "ip_address": "1.2.3.4",
+                "date": 5010,
+                "expire": 6010
+            }
+    },
+    {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Bob",
+                "url": "www.google.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5020,
+                "expire": 6020
+            }
+    },
+    {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Rick",
+                "url": "www.aerospike.com",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5000,
+                "expire": 6000
+            }
+    },
+    {
+            "command": "new_site_visit",
+            "visit_info": {
+                "user_name": "Bob",
+                "url": "www.aerospike.com/documentation",
+                "referrer": "xyz",
+                "page_title": "abc",
+                "ip_address": "1.2.3.4",
+                "date": 5030,
+                "expire": 6030
+            }
+    },
+    {
+            "command": "query_user",
+            "user": "Bob"
+    },
+    {
+            "command": "remove_expired",
+            "user": "Bob",
+            "expire": 5500
+    }
+    ]
+}
+
+```
+
+
+
