@@ -1,6 +1,5 @@
 package com.aerospike.examples.ldt;
 
-//import java.io.Console;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -98,6 +97,7 @@ public class UrlTracker {
 	private String inputFileName;
 	private WritePolicy writePolicy;
 	private Policy policy;
+	private int generateData;
 
 	protected Console console;
 	
@@ -124,6 +124,9 @@ public class UrlTracker {
 		this.namespace = namespace;
 		this.set = set; // Set will be overridden by the data.
 		this.inputFileName = fileName;
+		this.generateData = 0;  // If non-zero, then generate data rather than
+								// read from JSON file.
+		
 		this.writePolicy = new WritePolicy();
 		this.writePolicy.timeout = 1000;
 		this.writePolicy.maxRetries = 0;
@@ -312,9 +315,9 @@ public class UrlTracker {
 			ScanSet scanSet = new ScanSet( console );
 			recordList = scanSet.runScan(client, this.namespace, custID);
 			
-//			showRecordList( recordList );
-			
-//			deleteRecordList( recordList );
+			// NOTE: These operations will be activated shortly.
+			// showRecordList( recordList );	
+			// deleteRecordList( recordList );
 			
 		} catch (Exception e){
 			e.printStackTrace();
@@ -357,6 +360,7 @@ public class UrlTracker {
 			options.addOption("u", "usage", false, "Print usage.");
 			options.addOption("f", "filename", true, "Input File (default: commands.json)");
 			options.addOption("t", "type", true, "LDT Type (default: LLIST)");
+			options.addOption("g", "generate", true, "Generate input data (default: false)");
 
 			CommandLineParser parser = new PosixParser();
 			CommandLine cl = parser.parse(options, args, false);
@@ -368,6 +372,9 @@ public class UrlTracker {
 			String set = cl.getOptionValue("s", "demo");
 			String fileName = cl.getOptionValue("f", "commands.json");
 			String ldtType = cl.getOptionValue("t", "LDT Type");
+			
+			String generateString = cl.getOptionValue("g", "0");
+			int generateCount = Integer.parseInt(generateString);
 
 			console.info("Host: " + host);
 			console.info("Port: " + port);
@@ -393,7 +400,12 @@ public class UrlTracker {
 			}
 
 			UrlTracker tracker = new UrlTracker(host, port, namespace, set, fileName, console );
-			tracker.processCommands( ldtType );
+			if (generateCount > 0){
+				tracker.generateCommands( ldtType, generateCount );
+			} else {
+				tracker.processCommands( ldtType );
+			}
+
 
 		} catch (Exception e) {
 			console.error("Critical error::" + e.toString());
@@ -409,6 +421,28 @@ public class UrlTracker {
 		String syntax = LListOperations.class.getName() + " [<options>]";
 		formatter.printHelp(pw, 100, syntax, "options:", options, 0, 2, null);
 		System.out.println(sw.toString());
+	}
+	
+	/**
+	 * generateCommands():  Rather than READ the commands from a file, we 
+	 * instead GENERATE the commands and then act on them.  We use a random
+	 * distribution of operations
+	 * 
+	 * (*) NewUser <data>: Add a new User Record to Set N
+	 * (*) NewEntry <data>: Add a new Site Visit entry to User Record in Set N
+	 * (*) QueryUser <data>: Fetch all of the Site Data for a User in Set N
+	 * (*) RemoveExpired: Remove all Site entries that have expired
+	 * 
+	 * as well as the minor commands:
+	 * (-) ScanSet: Show all records in the customer set
+	 * (-) RemoveRecord: Remove a record, by key
+	 * (-) RemoveAllRecords: Remove all records in a customer set
+	 * 
+	 * @throws Exception
+	 */
+	public void generateCommands( String ldtType, int count ) {
+		console.error("GENERATE COMMANDS OPTION NOT YET IMPLEMENTED");
+		console.error("But -- will be soon");
 	}
 
 	/**

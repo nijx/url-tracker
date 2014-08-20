@@ -87,7 +87,7 @@ The two main problems addressed by the example application are:
 We present two different (although, related) solutions to this problem.
 
 The source code for this solution is available on GitHub, and the README.md 
-http://github.com/some place. 
+is in:  `https://github.com/aerospike/url-tracker`
 
 
 ##The Example Application Invocation
