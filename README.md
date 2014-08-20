@@ -89,10 +89,23 @@ We present two different (although, related) solutions to this problem.
 The source code for this solution is available on GitHub, and the README.md 
 is in:  `https://github.com/aerospike/url-tracker`
 
+##Installing and Running This Application
+
+This is a Java application that uses Aerospike Java Client (version 3.0.27 or later), eclipse and Maven.  The `pom.xml` file shows Maven how to build the package.
+Maven can easily be obtained from: `http://maven.apache.org/`
+
+One set of steps for obtaining, building and running this application would be the following:
+1. get the package from github: `git clone git@github.com:aerospike/url-tracker.git`
+2. Import the package into eclipse as a git project
+3. Set the options (see options below) to point to a running Aerospike server
+4. Use the default commands.json file, or create your own.
+
 
 ##The Example Application Invocation
 
 The application is a Java application, built as a Maven Project.  It can be run inside eclipse (a common choice while developing) or as a stand-alone program using the generated jar file.  The main class is **UrlTracker** and the main function is `main()`.
+
+In the eclipse tree -- the generated jar file is: `url-tracker-new-1.0.0-full.jar`
 
 The application can be started with the following options:
 
