@@ -23,12 +23,28 @@ import com.aerospike.client.Log;
 import com.aerospike.client.Log.Level;
 
 public class Console implements Log.Callback {
+	
+	// Show the level here that we're using.
+	private Level level = Level.INFO;
 
-	private static final SimpleDateFormat Formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
+	private static final SimpleDateFormat Formatter = 
+			new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
 
 	public Console() {
 		Log.setLevel(Level.INFO);
 		Log.setCallback(this);
+	}
+	
+	public void debug(String format, Object... args) {
+		if (level == Level.DEBUG ) {
+			write(Level.DEBUG, format, args);
+		}
+	}
+
+	public void debug(String message) {
+		if (level == Level.DEBUG ) {
+			write(Level.DEBUG, message);
+		}
 	}
 
 	public void info(String format, Object... args) {

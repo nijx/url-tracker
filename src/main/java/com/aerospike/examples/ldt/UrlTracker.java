@@ -1,15 +1,13 @@
 package com.aerospike.examples.ldt;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.Random;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -17,17 +15,14 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
-import org.apache.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
-import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
-import com.aerospike.client.Value;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
 
@@ -141,41 +136,17 @@ public class UrlTracker {
 	 * @param commandObj
 	 */
 	private void processNewCustomer( JSONObject commandObj ) {
-		console.info("ENTER ProcessNewCustomer");
+		console.debug("ENTER ProcessNewCustomer");
 
-		JSONObject userObj = (JSONObject) commandObj.get("customer");
-
-		String customerStr = (String) userObj.get("customer_id");
-		String contactStr = (String) userObj.get("contact");
-		String custID = (String) userObj.get("set_name");
-
+		JSONObject custObj = (JSONObject) commandObj.get("customer");
+		CustomerRecord custRec = new CustomerRecord(console, commandObj, 0);
 		try {
-
-			// Note that custID is BOTH the name of the Aerospike SET and it
-			// is the KEY of the Singleton Record for Customer info.
-			Key key        = new Key(this.namespace, custID, custID);
-			Bin custBin    = new Bin("custID", custID);
-			Bin nameBin    = new Bin("name", customerStr);
-			Bin contactBin = new Bin("contact", contactStr);
-
-			console.info("Put: namespace(%s) set(%s) key(%s) custID(%s) name(%s) contact(%s)",
-					key.namespace, key.setName, key.userKey, custBin.value, nameBin.value, contactBin.value );
-
-			// Write the Record
-			client.put(this.writePolicy, key, custBin, nameBin, contactBin );
-			console.info("Get: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey);
-
-			// Verify that we wrote the record.  Read it and validate.
-			Record record = client.get(this.policy, key);
-			if (record == null) {
-				throw new Exception(String.format(
-						"Failed to get: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey));
-			}
-
-		} catch (Exception e){
+			custRec.toStorage(client, this.namespace);
+		} catch (Exception e) {
 			e.printStackTrace();
-			console.info("Exception: " + e);
+			console.warn("Exception: " + e);
 		}
+
 	} // end processNewCustomer()
 
 	/**
@@ -185,46 +156,17 @@ public class UrlTracker {
 	 * @param commandObj
 	 */
 	private void processNewUser( JSONObject commandObj ) {
-		console.info("ENTER ProcessNewUser");
+		console.debug("ENTER ProcessNewUser");
 
 		JSONObject userObj = (JSONObject) commandObj.get("user");
-
-		String nameStr = (String) userObj.get("name");
-		String emailStr = (String) userObj.get("email");
-		String phoneStr = (String) userObj.get("phone");
-		String addressStr = (String) userObj.get("address");
-		String companyStr = (String) userObj.get("company");
-		String custID = (String) userObj.get("set_name");
-
+		UserRecord userRec = new UserRecord(console, commandObj, 0);
 		try {
-
-			// The Customer ID is the name of the set.
-			Key key = new Key(this.namespace, custID, nameStr);
-			Bin userBin = new Bin("userID", nameStr);
-			Bin emailBin = new Bin("email", emailStr);
-			Bin phoneBin = new Bin("phone", phoneStr);
-			Bin addrBin = new Bin("address", addressStr);
-			Bin compBin = new Bin("company", companyStr);
-
-			console.info("Put: namespace(%s) set(%s) key(%s) userID(%s) email(%s) phone(%s) address(%s) company(%s)",
-					key.namespace, key.setName, key.userKey, userBin.value, emailBin.value, 
-					phoneBin.value, addrBin.value, compBin.value);
-
-			client.put(this.writePolicy, key, userBin, emailBin, phoneBin, addrBin, compBin );
-
-			console.info("Get: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey);
-
-			Record record = client.get(this.policy, key);
-
-			if (record == null) {
-				throw new Exception(String.format(
-					"Failed to get: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey));
-			}
-
-		} catch (Exception e){
+			userRec.toStorage(client, this.namespace);
+		} catch (Exception e) {
 			e.printStackTrace();
-			console.error("Exception: " + e);
+			console.warn("Exception: " + e);
 		}
+
 	} // end processNewUser()
 
 
@@ -235,7 +177,7 @@ public class UrlTracker {
 	 * @param params
 	 */
 	private void processNewSiteVisit( JSONObject commandObj  ) {
-		console.info("ENTER ProcessNewSiteVisit:");
+		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
@@ -266,7 +208,7 @@ public class UrlTracker {
 	 * @param params
 	 */
 	private void processSetQuery( JSONObject commandObj  ) {
-		console.info("ENTER ProcessSetQuery");
+		console.debug("ENTER ProcessSetQuery");
 
 		String custID = (String) commandObj.get("set_name");
 		try {
@@ -276,7 +218,7 @@ public class UrlTracker {
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
-		console.info("Done with Query");
+		console.debug("Done with Query");
 	} // end processSetQuery()
 	
 	/**
@@ -284,7 +226,7 @@ public class UrlTracker {
 	 * @param commandObj
 	 */
 	private void processRemoveRecord( JSONObject commandObj  ) {
-		console.info("ENTER ProcessRemoveRecord");
+		console.debug("ENTER ProcessRemoveRecord");
 		
 		String userID = (String) commandObj.get("user");
 		String custID = (String) commandObj.get("set_name");
@@ -297,7 +239,7 @@ public class UrlTracker {
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
-		console.info("Done with Query");
+		console.debug("Done with Query");
 	} // end processRemoveRecord()
 	
 	/**
@@ -306,7 +248,7 @@ public class UrlTracker {
 	 * @param commandObj
 	 */
 	private void processRemoveAllRecords( JSONObject commandObj  ) {
-		console.info("ENTER processRemoveAllRecords");
+		console.debug("ENTER processRemoveAllRecords");
 
 		String custID = (String) commandObj.get("set_name");
 		List<Record> recordList;
@@ -323,7 +265,7 @@ public class UrlTracker {
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
-		console.info("Done with Query");
+		console.debug("Done with Query");
 	} // end processRemoveAllRecords()
 	
 	
@@ -349,7 +291,7 @@ public class UrlTracker {
 
 	public static void main(String[] args) throws AerospikeException {
 		Console console = new Console();
-		console.info("Starting in Main (1.1.4) \n");
+		console.info("Starting in Main (1.1.6) \n");
 
 		try {
 			Options options = new Options();
@@ -361,6 +303,9 @@ public class UrlTracker {
 			options.addOption("f", "filename", true, "Input File (default: commands.json)");
 			options.addOption("t", "type", true, "LDT Type (default: LLIST)");
 			options.addOption("g", "generate", true, "Generate input data (default: false)");
+			options.addOption("c", "customer", true, "Number of customer records (default: 10)");
+			options.addOption("r", "records", true, "Ave number of users per customer (default: 20)");
+			options.addOption("v", "visits", true, "Ave number of visits per user (default: 500)");
 
 			CommandLineParser parser = new PosixParser();
 			CommandLine cl = parser.parse(options, args, false);
@@ -371,8 +316,17 @@ public class UrlTracker {
 			String namespace = cl.getOptionValue("n", "test");
 			String set = cl.getOptionValue("s", "demo");
 			String fileName = cl.getOptionValue("f", "commands.json");
-			String ldtType = cl.getOptionValue("t", "LDT Type");
+			String ldtType = cl.getOptionValue("t", "LLIST");
 			
+			String customerString = cl.getOptionValue("c", "10");
+			int customers = Integer.parseInt(customerString);
+			
+			String recordString = cl.getOptionValue("r", "20");
+			int records = Integer.parseInt(recordString);
+			
+			String visitString = cl.getOptionValue("v", "500");
+			int visits = Integer.parseInt(visitString);
+		
 			String generateString = cl.getOptionValue("g", "0");
 			int generateCount = Integer.parseInt(generateString);
 
@@ -382,6 +336,10 @@ public class UrlTracker {
 			console.info("Set: " + set);
 			console.info("FileName: " + fileName);
 			console.info("LDT Type: " + ldtType);
+			console.info("Customer Records: " + customers);
+			console.info("User Records: " + records);
+			console.info("User Site Visit Records: " + visits);
+			console.info("Generate: " + generateCount );
 
 			@SuppressWarnings("unchecked")
 			List<String> cmds = cl.getArgList();
@@ -401,7 +359,8 @@ public class UrlTracker {
 
 			UrlTracker tracker = new UrlTracker(host, port, namespace, set, fileName, console );
 			if (generateCount > 0){
-				tracker.generateCommands( ldtType, generateCount );
+				tracker.generateCommands( ldtType, generateCount, customers,
+						records, visits );
 			} else {
 				tracker.processCommands( ldtType );
 			}
@@ -440,13 +399,121 @@ public class UrlTracker {
 	 * 
 	 * @throws Exception
 	 */
-	public void generateCommands( String ldtType, int count ) {
-		console.error("GENERATE COMMANDS OPTION NOT YET IMPLEMENTED");
-		console.error("But -- will be soon");
-	}
+	public void generateCommands( String ldtType, int generateCount,
+			int customers, int userRecords, int visitEntries ) 
+	{
+		
+		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) Visits(%d)", 
+				generateCount, customers, userRecords, visitEntries);
+		
+		// Set up the specific type of LDT we're going to use (LLIST or LMAP).
+		try {
+			// Create an LDT Ops var for the type of LDT we're using:
+			if ("LLIST".equals(ldtType)) {
+				this.ldtOps = new LListOperations( client, namespace, set, console );
+			} else 	if ("LMAP".equals(ldtType)) {
+				this.ldtOps = new LMapOperations( client, namespace, set, console );
+			} else {
+				console.error("Can't continue without a valid LDT type.");
+				return;
+			}
+		} 	catch (Exception e){
+			System.out.println("GENERAL EXCEPTION:" + e);
+			e.printStackTrace();
+		}
+		
+		// For a given number of "generateCount" iterations, we're going to 
+		// generate a semi-random set of objects that correspond to Customers, 
+		// Users and User-Site Visits.  
+		// There are some guidelines:
+		// In order to make processing easy, we're going to set up the customer
+		// records first, then for each customer, we're going to set up some
+		// number of user records, then we will loop thru, generating user-site
+		// visit records for a user that corresponds to a customer.
+		//
+		// We're going to create these records in a pattern, so all we have to
+		// remember the customer number, and that will generate a customer
+		// record and an entire set of User Records.
+		int i = 0;
+		Record record = null;
+		UserRecord userRec = null;
+		CustomerRecord custRec = null;
+		SiteVisitEntry sve = null;
+		try {
+			for (i = 0; i < customers; i++) {
+				custRec = new CustomerRecord(console, i);
+				custRec.toStorage(client, namespace);
+
+				for (int j = 0; j < userRecords; j++) {
+					userRec = new UserRecord(console, custRec.getCustomerID(), j);
+					userRec.toStorage(client, namespace);
+
+//					for (int k = 0; k < visitEntries; k++) {
+//						sve = new SiteVisitEntry(console, 
+//								custRec.getCustomerID(), userRec.getUserID(), k);
+//						sve.toStorage(client, ldtOps);
+//					} // end for each site visit
+				} // end for each user record	
+			} // end for each customer
+			
+//			// When debugging -- read everything back.
+//			for (i = 0; i < customers; i++) {
+//				custRec = new CustomerRecord(console, i);
+//				record = custRec.fromStorage(client, namespace);
+//				console.debug("Found Customer Record:" + record.toString());
+//
+//				for (int j = 0; j < userRecords; j++) {
+//					userRec = new UserRecord(console, custRec.getCustomerID(), j);
+//					record =  userRec.fromStorage(client, namespace);
+//					console.debug("Found User Record:" + record.toString());
+//
+////					for (int k = 0; k < visitEntries; k++) {
+////						SiteVisitEntry sve = new SiteVisitEntry(console, 
+////								cr.getCustomerID(), ur.getUserID(), k);
+////						sve.toStorage(client, ldtOps);
+////					} // end for each site visit
+//				} // end for each user record	
+//			} // end for each customer
+			
+			// Start a steady-State insertion and expiration cycle.
+			// For "Generation Count" iterations, generate a pseudo-random
+			// pattern for a Customer/User record and then insert a site visit
+			// record.  Since we're using TIME (nano-seconds) for the key, we
+			// expect that it will be unique.   If we do get a collision (esp
+			// when we start using multiple threads to drive it), we'll just
+			// retry (which will give us a different nano-time number).
+			Random random = new Random();
+			int customerSeed = 0;
+			int userSeed = 0;
+			console.info("Done with Load.  Starting Site Visit Generation.");
+			for (i = 0; i < generateCount; i++) {
+				customerSeed = random.nextInt(customers);
+				custRec = new CustomerRecord(console, customerSeed);
+				
+				userSeed = random.nextInt(userRecords);
+				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
+				
+				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
+						userRec.getUserID(), i);
+				sve.toStorage(client, ldtOps);
+				
+				if( i % 10000 == 0 ) {
+					console.info("Stored Cust(%d); User(%d) SVE(%d)", customerSeed, userSeed, i);
+				}
+					
+			} // end for each generateCount
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+			console.error("Problem with Customer Record: Seed(%d)", i);
+		}
+
+		console.info("ProcessCommands: Done with GENERATED COMMANDS");
+	} // end generateCommands()
+	
 
 	/**
-	 * ProcessCommands():  Read the file of JSON commands and process each one
+	 * processCommands():  Read the file of JSON commands and process each one
 	 * of the major commands:
 	 * (*) NewUser <data>: Add a new User Record to Set N
 	 * (*) NewEntry <data>: Add a new Site Visit entry to User Record in Set N
@@ -492,7 +559,7 @@ public class UrlTracker {
 
 			// take the elements of the json array
 			for(int i=0; i< commands.size(); i++){
-				console.info("The " + i + " element of the array: "+commands.get(i));
+				console.debug("The " + i + " element of the array: "+commands.get(i));
 			}
 			Iterator i = commands.iterator();
 

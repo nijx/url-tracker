@@ -2,7 +2,6 @@ package com.aerospike.examples.ldt;
 
 //import java.io.Console;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -10,10 +9,8 @@ import org.json.simple.JSONObject;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
-import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Language;
-import com.aerospike.client.Record;
 import com.aerospike.client.Value;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
@@ -83,6 +80,67 @@ public class LMapOperations implements ILdtOperations {
 //			console.error("Error Registering UDF: " + e );
 //		}
 	} // end setup()
+	
+	/**
+	 * Create a MAP object that will hold the Site Visit value.
+	 * @param entry
+	 * @return
+	 */
+	public Map<String,Object> newSiteObject(SiteVisitEntry entry) {
+
+		// For THIS example, we're going to put the Site Visit object into
+		// a Large List (LLIST), so we're going to use as an Object Key the
+		// Expire Date (an integer).  That way, the Site Visit objects will
+		// be kept in EXPIRE ORDER, and thus will be easy to scan and manage.
+		HashMap<String,Object> siteObjMap = new HashMap<String,Object>();
+		siteObjMap.put("key", entry.getExpire());
+		siteObjMap.put("name", entry.getUserID());
+		siteObjMap.put("URL", entry.getUrl());
+		siteObjMap.put("referrer", entry.getReferrer());
+		siteObjMap.put("page_title", entry.getPageTitle());
+		siteObjMap.put("date", entry.getDate());
+		
+		return siteObjMap;	
+	}
+	
+	/**
+	 * Enter a new Site Visit object in the collection of site visits for
+	 * a particular user.  Order the Site Visit Objects by Expire Time.
+	 * @param commandObj
+	 * @param params
+	 */
+	public void storeSiteObject(SiteVisitEntry sve, Map<String,Object> siteObjMap  ) {
+		console.info("ENTER storeObject:");
+
+//		// Extract the values from the JSON object
+//		String nameStr = (String) sve.getUserID();
+//		String customerStr = (String) sve.getCustID();
+//		
+//		// The Customer ID (custID) is the Aerospike SET name, and userID is the
+//		// key for the record (the user data and the site visit list).
+//		String userID = nameStr;
+//		String custID = customerStr;
+//
+//		try {
+//			
+//			sve.toStorage(client, this);
+//
+//			Key userKey = new Key(this.namespace, custID, userID);
+//			String siteListBin = "Site List";
+//
+//			// Initialize large set operator.
+//			com.aerospike.client.large.LargeList llist = 
+//					client.getLargeList(this.policy, userKey, siteListBin, null);
+//
+//			// Package up the Map Object and add it to the LLIST.  Note that the
+//			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
+//			llist.add(Value.getAsMap(siteObjMap));			
+//
+//		} catch (Exception e){
+//			e.printStackTrace();
+//			System.out.println("Exception: " + e);
+//		}
+	} // end storeSiteObject()
 
 	/**
 	 * Enter a new Site Visit object in the collection of site visits for

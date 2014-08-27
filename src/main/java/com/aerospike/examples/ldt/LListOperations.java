@@ -55,6 +55,61 @@ public class LListOperations implements ILdtOperations {
 		// Nothing needed for LLIST (yet).
 		// Eventually, we will register needed UDFs here.
 	}
+	
+	/**
+	 * Create a MAP object that will hold the Site Visit value.
+	 * @param entry
+	 * @return
+	 */
+	public Map<String,Object> newSiteObject(SiteVisitEntry entry) {
+
+		// For THIS example, we're going to put the Site Visit object into
+		// a Large List (LLIST), so we're going to use as an Object Key the
+		// Expire Date (an integer).  That way, the Site Visit objects will
+		// be kept in EXPIRE ORDER, and thus will be easy to scan and manage.
+		HashMap<String,Object> siteObjMap = new HashMap<String,Object>();
+		siteObjMap.put("key", entry.getExpire());
+		siteObjMap.put("name", entry.getUserID());
+		siteObjMap.put("URL", entry.getUrl());
+		siteObjMap.put("referrer", entry.getReferrer());
+		siteObjMap.put("page_title", entry.getPageTitle());
+		siteObjMap.put("date", entry.getDate());
+		
+		return siteObjMap;	
+	}
+	
+	/**
+	 * Enter a new Site Visit object in the collection of site visits for
+	 * a particular user.  Order the Site Visit Objects by Expire Time.
+	 * @param commandObj
+	 * @param params
+	 */
+	public void storeSiteObject(SiteVisitEntry sve, Map<String,Object> siteObjMap  ) {
+		console.debug("ENTER storeObject:");
+		
+		// The Customer ID (custID) is the Aerospike SET name, and userID is the
+		// key for the record (the user data and the site visit list).
+		String userID = sve.getUserID();
+		String custID = sve.getCustID();
+
+		try {		
+
+			Key userKey = new Key(this.namespace, custID, userID);
+			String siteListBin = "Site List";
+
+			// Initialize Large LIST operator.
+			com.aerospike.client.large.LargeList llist = 
+					client.getLargeList(this.policy, userKey, siteListBin, null);
+
+			// Package up the Map Object and add it to the LLIST.  Note that the
+			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
+			llist.add(Value.getAsMap(siteObjMap));			
+
+		} catch (Exception e){
+			e.printStackTrace();
+			System.out.println("Exception: " + e);
+		}
+	} // end storeSiteObject()
 
 
 	/**
@@ -64,49 +119,13 @@ public class LListOperations implements ILdtOperations {
 	 * @param params
 	 */
 	public void processNewSiteVisit( JSONObject commandObj  ) {
-		console.info("ENTER ProcessNewSiteVisit:");
-
-		JSONObject siteObj = (JSONObject) commandObj.get("visit_info");
-
-		// Extract the values from the JSON object
-		String nameStr = (String) siteObj.get("user_name");
-		String urlStr = (String) siteObj.get("url");
-		String refStr = (String) siteObj.get("referrer");
-		String pageStr = (String) siteObj.get("page_title");
-		Long dateInt = (Long) siteObj.get("date");
-		Long expireInt = (Long) siteObj.get("expire");
-		String customerStr = (String) siteObj.get("set_name");
+		console.debug("ENTER ProcessNewSiteVisit:");
 		
-		// The Customer ID (custID) is the Aerospike SET name, and userID is the
-		// key for the record (the user data and the site visit list).
-		String userID = nameStr;
-		String custID = customerStr;
+		SiteVisitEntry sve = 
+				new SiteVisitEntry(console, commandObj, namespace, 0);
 
 		try {
-
-			Key userKey = new Key(this.namespace, custID, userID);
-			String siteListBin = "Site List";
-
-			// Create a MAP object that will hold the Site Visit value.
-			// For THIS example, we're going to put the Site Visit object into
-			// a Large List (LLIST), so we're going to use as an Object Key the
-			// Expire Date (an integer).  That way, the Site Visit objects will
-			// be kept in EXPIRE ORDER, and thus will be easy to scan and manage.
-			HashMap<String,Object> siteObjMap = new HashMap<String,Object>();
-			siteObjMap.put("key", expireInt);
-			siteObjMap.put("name", nameStr);
-			siteObjMap.put("URL", urlStr);
-			siteObjMap.put("referrer", refStr);
-			siteObjMap.put("page_title", pageStr);
-			siteObjMap.put("date", dateInt);
-
-			// Initialize large set operator.
-			com.aerospike.client.large.LargeList llist = client.getLargeList(this.policy, userKey, siteListBin, null);
-
-			// Package up the Map Object and add it to the LLIST.  Note that the
-			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
-			llist.add(Value.getAsMap(siteObjMap));			
-
+			sve.toStorage(client, this);		
 		} catch (Exception e){
 			e.printStackTrace();
 			System.out.println("Exception: " + e);
@@ -123,7 +142,7 @@ public class LListOperations implements ILdtOperations {
 	public void processSiteQuery( JSONObject commandObj  ) {
 		System.out.println("ENTER ProcessSiteQuery");
 
-		String userID = (String) commandObj.get("user");
+		String userID = (String) commandObj.get("user_name");
 		String custID = (String) commandObj.get("set_name");
 
 		try {
@@ -136,14 +155,14 @@ public class LListOperations implements ILdtOperations {
 			// Perform a Scan on all of the Site Visit Objects
 			List<Map<String,Object>> scanList =  (List<Map<String,Object>>) llist.scan();
 			for (Map<String,Object> mapItem : scanList) {
-				console.info("Map Item" + mapItem );
+				console.debug("Map Item" + mapItem );
 			}
 
 		} catch (Exception e){
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
-		System.out.println("Done with Site Query");
+		console.info("Done with Site Query");
 	} // end processSiteQuery()
 	
 	/**
@@ -192,9 +211,9 @@ public class LListOperations implements ILdtOperations {
 			// Validate Results with a Scan:
 			List<Map<String,Object>> scanList =  (List<Map<String,Object>>) llist.scan();
 			if (scanList.size() > 0 ) {
-				console.info("Showing Remaining Items after Expire.");
+				console.debug("Showing Remaining Items after Expire.");
 				for (Map<String,Object> mapItem : scanList) {
-					console.info("Map Item" + mapItem );
+					console.debug("Map Item" + mapItem );
 				}
 			} else {
 				console.info("NO Objects from Scan: Nothing left after Expire.");

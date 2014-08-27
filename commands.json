@@ -1,8 +1,16 @@
 {
-    "command_file": "DataFile_1",
+    "command_file": "DataFile_1.2",
     "commands": [
-        {
+    {   "command": "new_customer",
+            "customer": {
+                "customer_id": "Indigo",
+                "contact": "Mr. Raj",
+                "set_name": "CustSetOne" 
+                }
+    },
+    {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Bob",
                 "email": "bob@www.aerospike.com",
@@ -13,6 +21,7 @@
 	},
         {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Sue",
                 "email": "sue@www.aerospike.com",
@@ -23,6 +32,7 @@
 	},
         {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Joe",
                 "email": "joe@www.aerospike.com",
@@ -33,6 +43,7 @@
         },
 	{
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Rick",
                 "email": "rick@www.aerospike.com",
@@ -43,8 +54,9 @@
         },
         {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob",
             "visit_info": {
-                "user_name": "Bob",
                 "url": "www.aerospike.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -55,8 +67,9 @@
         },
         {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Sue",
             "visit_info": {
-                "user_name": "Sue",
                 "url": "www.aerospike.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -67,8 +80,9 @@
         },
         {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Sue",
             "visit_info": {
-                "user_name": "Sue",
                 "url": "www.microsoft.com",
                 "referrer": "xyz",
                 "page_title": "1a2b3c",
@@ -79,8 +93,10 @@
         },
         {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob",
             "visit_info": {
-                "user_name": "Bob",
+
                 "url": "www.google.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -91,8 +107,9 @@
         },
         {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Rick",
             "visit_info": {
-                "user_name": "Rick",
                 "url": "www.aerospike.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -103,8 +120,9 @@
         },
         {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+             "user_name": "Bob",
             "visit_info": {
-                "user_name": "Bob",
                 "url": "www.aerospike.com/documentation",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -115,12 +133,18 @@
         },
         {
             "command": "query_user",
-            "user": "Bob"
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob"
         },
         {
             "command": "remove_expired",
-            "user": "Bob",
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob",
             "expire": 5500
-        }
+        },
+        {
+            "command": "query_set",
+            "set_name": "CustSetOne"
+        },
     ]
 }
