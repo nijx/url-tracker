@@ -117,18 +117,11 @@ public class CustomerRecord {
 
 			// Write the Record
 			client.put(this.writePolicy, key, custBin, nameBin, contactBin );
-//			console.debug("Put: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey);
-
-//			// Verify that we wrote the record.  Read it and validate.
-//			Record record = client.get(this.policy, key);
-//			if (record == null) {
-//				throw new Exception(String.format(
-//						"Failed to get: namespace=%s set=%s key=%s", key.namespace, key.setName, key.userKey));
-//			}
 
 		} catch (Exception e){
 			e.printStackTrace();
 			console.warn("Exception: " + e);
+			result = -1;
 		}
 
 		return result;

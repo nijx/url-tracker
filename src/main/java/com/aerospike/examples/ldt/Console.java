@@ -35,6 +35,10 @@ public class Console implements Log.Callback {
 		Log.setCallback(this);
 	}
 	
+	public boolean debugIsOn() {
+		return (level == Level.DEBUG);
+	}
+	
 	public void debug(String format, Object... args) {
 		if (level == Level.DEBUG ) {
 			write(Level.DEBUG, format, args);

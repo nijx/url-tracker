@@ -1,10 +1,8 @@
 package com.aerospike.examples.ldt;
 
+import java.util.List;
 import java.util.Map;
-
-
 //import java.io.Console;
-import org.json.simple.JSONObject;
 
 /**
  * LDT Operations to be performed on Site-Visit Data.
@@ -31,28 +29,27 @@ public interface ILdtOperations {
 	 * @param sve
 	 * @param siteObjMap
 	 */
-	public void storeSiteObject(SiteVisitEntry sve, Map<String,Object> siteObjMap);
+	public void storeSiteObject(SiteVisitEntry sve, String ns,
+			Map<String,Object> siteObjMap);
 
 	/**
-	 * Enter a new Site Visit object in the collection of site visits for
-	 * a particular user. 
+	 * Scan the user's Site Visit List, and return a list of MAP objects.
 	 * @param commandObj
 	 */
-	public abstract void processNewSiteVisit( JSONObject commandObj  );
+	public abstract List<Map<String,Object>> processSiteQuery( String ns,
+			String set, String key);
 
 	/**
-	 * Scan the user's Site Visit List.  
-	 * @param commandObj
-	 */
-	public abstract void processSiteQuery( JSONObject commandObj  );
-
-	
-	/**
-	 * Remove expired site visit entries.
+	 * Remove expired site visit entries that are older (smaller time) than
+	 * the current time (expressed in nano-seconds).
 	 * 
-	 * @param commandObj
+	 * @param ns
+	 * @param set
+	 * @param key
+	 * @param expire
 	 */
-	public abstract void processRemoveExpired( JSONObject commandObj  );
+	public abstract void processRemoveExpired( String ns, String set, String key,
+			long expire);
 
 
 } // end interface ILdtOperations

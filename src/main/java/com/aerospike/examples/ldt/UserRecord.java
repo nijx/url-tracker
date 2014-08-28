@@ -57,8 +57,8 @@ public class UserRecord {
 		this.index = seed; 
 		this.console = console;
 		
-		console.debug("Creating User Record(1): CustID(%s) UserID(%s)",
-				custID, userID);
+		console.debug("Creating User Record(%d): CustID(%s) UserID(%s)",
+				seed, custID, userID);
 	}
 	
 	/**

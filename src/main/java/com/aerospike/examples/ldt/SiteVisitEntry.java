@@ -34,7 +34,6 @@ public class SiteVisitEntry {
 	public static final long TIME_TO_LIVE = 300000000000L;
 
 	private Console console;
-	private String namespace;
 	private String custID; // The Set Name
 	private String userID; // The User Record
 	private String url;
@@ -51,19 +50,20 @@ public class SiteVisitEntry {
 	 * @param console
 	 * @param seed
 	 */
-	public SiteVisitEntry(Console console, String namespace, String custID, 
-			int seed) 
+	public SiteVisitEntry(Console console, String custID, 
+			String userID, int seed) 
 	{
-		this.namespace = namespace;
+		this.console = console;
 		this.custID = custID;
-		this.userID = String.format("UserName(%d)", seed);
+		this.userID = userID;
 		
 		this.url = String.format("url(%d)", seed);
 		this.referrer = String.format("Referrer(%d)", seed);
 		this.pageTitle = String.format("PageTitle(%d)", seed);
 		
-		// Get the current Time.
-		Date javaDate = new Date(0);
+		// Get the current Time.  However, better to use NANO-seconds rather
+		// than milliseconds -- because we get duplicates with milliseconds.
+//		Date javaDate = new Date(0);
 //		this.date = javaDate.getTime();
 		this.date = System.nanoTime();
 		this.expire = this.date + TIME_TO_LIVE;
@@ -95,11 +95,8 @@ public class SiteVisitEntry {
 		String referrerStr = (String) siteObj.get("referrer");
 		String pageTitleStr = (String) siteObj.get("page_title");
 		Long dateLong = (Long) siteObj.get("date");
-//		Long dateLong = Long.parseLong(dateStr);
 		Long expireLong = (Long) siteObj.get("expire");
-//		Long expireLong = Long.parseLong(expireStr);
-		
-		this.namespace = namespace;
+
 		this.userID = nameStr;
 		this.custID = custStr;
 		
@@ -137,7 +134,6 @@ public class SiteVisitEntry {
 	{
 		this.console = console;	
 		
-		this.namespace = namespace;
 		this.custID = custID;
 		this.userID = userID;
 		
@@ -158,7 +154,8 @@ public class SiteVisitEntry {
 	 * @return
 	 * @throws Exception
 	 */
-	public int toStorage(AerospikeClient client, ILdtOperations ldtOps) 
+	public int toStorage(AerospikeClient client, String namespace,
+			ILdtOperations ldtOps) 
 			throws Exception 
 	{
 		int result = 0;
@@ -169,7 +166,7 @@ public class SiteVisitEntry {
 			Map<String,Object> siteObjMap = ldtOps.newSiteObject(this);
 			
 			// Store the Map Object in the appropriate LDT
-			ldtOps.storeSiteObject(this, siteObjMap);		
+			ldtOps.storeSiteObject(this, namespace, siteObjMap);		
 
 		} catch (Exception e){
 			e.printStackTrace();
@@ -179,49 +176,50 @@ public class SiteVisitEntry {
 		return result;
 	}
 
-	/**
-	 * Given a User object, read it from the set (using the key custID) and
-	 * validate it with the manufactured object.
-	 * 
-	 * @param client
-	 * @param nameSpace
-	 * @return
-	 * @throws Exception
-	 */
-	public SiteVisitEntry  fromStorage(AerospikeClient client, ILdtOperations ldtOps) 
-			throws Exception 
-	{
-		SiteVisitEntry result = this;
-
-		// Set is the Customer ID, Record Key is the userID.
-		String setName = this.custID;
-		String recordKey = this.userID;
-		
-		try {
-
-			// Get the User Record for a given UserId and CustID
-			Key key        = new Key(namespace, setName, recordKey);
-			console.debug("Get: namespace(%s) set(%s) key(%s)",
-					key.namespace, key.setName, key.userKey);
-
-			// Read the record and validate.
-			Record record = client.get(this.policy, key);
-			if (record == null) {
-				throw new Exception(String.format(
-						"Failed to get: namespace=%s set=%s key=%s", 
-						key.namespace, key.setName, key.userKey));
-			}
-			
-			console.debug("Record Result:" + record );
-			
-
-		} catch (Exception e){
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-		
-		return result;
-	}
+//	/**
+//	 * Given a User object, read it from the set (using the key custID) and
+//	 * validate it with the manufactured object.
+//	 * 
+//	 * @param client
+//	 * @param nameSpace
+//	 * @return
+//	 * @throws Exception
+//	 */
+//	public SiteVisitEntry fromStorage(AerospikeClient client, 
+//			String namespace, ILdtOperations ldtOps) 
+//			throws Exception 
+//	{
+//		SiteVisitEntry result = this;
+//
+//		// Set is the Customer ID, Record Key is the userID.
+//		String setName = this.custID;
+//		String recordKey = this.userID;
+//		
+//		try {
+//
+//			// Get the User Record for a given UserId and CustID
+//			Key key = new Key(namespace, setName, recordKey);
+//			console.debug("Get: namespace(%s) set(%s) key(%s)",
+//					key.namespace, key.setName, key.userKey);
+//
+//			// Read the record and validate.
+//			Record record = client.get(this.policy, key);
+//			if (record == null) {
+//				throw new Exception(String.format(
+//						"Failed to get: namespace=%s set=%s key=%s", 
+//						key.namespace, key.setName, key.userKey));
+//			}
+//			
+//			console.debug("Record Result:" + record );
+//			
+//
+//		} catch (Exception e){
+//			e.printStackTrace();
+//			console.warn("Exception: " + e);
+//		}
+//		
+//		return result;
+//	}
 	
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
@@ -237,30 +235,6 @@ public class SiteVisitEntry {
 		return sb.toString();
 	}
 	
-	/**
-	 * 	private Console console;
-	private String namespace;
-	private String custID; // The Set Name
-	private String userID; // The User Record
-	private String url;
-	private String referrer;
-	private String pageTitle;
-	private Long date;
-	private Long expire;
-	private int    index;
-	private WritePolicy writePolicy = new WritePolicy();
-	private Policy policy = new Policy();
-	 * @return
-	 */
-	
-
-	public String getNamespace() {
-		return namespace;
-	}
-
-	public void setNamespace(String namespace) {
-		this.namespace = namespace;
-	}
 
 	public String getCustID() {
 		return custID;

@@ -22,8 +22,6 @@ import com.aerospike.client.policy.WritePolicy;
 */
 public class LListOperations implements ILdtOperations {
 	private AerospikeClient client;
-	private String namespace;
-	private String set;
 	private WritePolicy writePolicy;
 	private Policy policy;
 
@@ -37,18 +35,16 @@ public class LListOperations implements ILdtOperations {
 	 * @param console
 	 * @throws AerospikeException
 	 */
-	public LListOperations(AerospikeClient client, String namespace, String set, 
-			Console console) throws AerospikeException 
+	public LListOperations(AerospikeClient client, Console console) 
+			throws AerospikeException 
 	{
 
 		this.client = client;
-		this.namespace = namespace;
-		this.set = set; // Set will be overridden by the data.
+		this.console = console;
 		this.writePolicy = new WritePolicy();
 		this.writePolicy.timeout = 1000;
 		this.writePolicy.maxRetries = 0;
 		this.policy = new Policy();
-		this.console = console;
 	}
 	
 	public void setup() {
@@ -84,7 +80,9 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void storeSiteObject(SiteVisitEntry sve, Map<String,Object> siteObjMap  ) {
+	public void storeSiteObject(SiteVisitEntry sve, String namespace,
+			Map<String,Object> siteObjMap  ) 
+	{
 		console.debug("ENTER storeObject:");
 		
 		// The Customer ID (custID) is the Aerospike SET name, and userID is the
@@ -94,7 +92,7 @@ public class LListOperations implements ILdtOperations {
 
 		try {		
 
-			Key userKey = new Key(this.namespace, custID, userID);
+			Key userKey = new Key(namespace, custID, userID);
 			String siteListBin = "Site List";
 
 			// Initialize Large LIST operator.
@@ -118,14 +116,14 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processNewSiteVisit( JSONObject commandObj  ) {
+	public void processNewSiteVisit( JSONObject commandObj, String ns  ) {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		SiteVisitEntry sve = 
-				new SiteVisitEntry(console, commandObj, namespace, 0);
+				new SiteVisitEntry(console, commandObj, ns, 0);
 
 		try {
-			sve.toStorage(client, this);		
+			sve.toStorage(client, ns, this);		
 		} catch (Exception e){
 			e.printStackTrace();
 			System.out.println("Exception: " + e);
@@ -139,23 +137,25 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processSiteQuery( JSONObject commandObj  ) {
+	public List<Map<String,Object>> processSiteQuery( String ns, String set, String key ) {
 		System.out.println("ENTER ProcessSiteQuery");
-
-		String userID = (String) commandObj.get("user_name");
-		String custID = (String) commandObj.get("set_name");
+		
+		List<Map<String,Object>> scanList = null;
 
 		try {
-			Key userKey = new Key(this.namespace, custID, userID);
+			Key userKey = new Key(ns, set, key);
 			String siteListBin = "Site List";
 
 			// Initialize large List operator.
-			com.aerospike.client.large.LargeList llist = client.getLargeList(this.policy, userKey, siteListBin, null);
+			com.aerospike.client.large.LargeList llist = 
+					client.getLargeList(this.policy, userKey, siteListBin, null);
 
 			// Perform a Scan on all of the Site Visit Objects
-			List<Map<String,Object>> scanList =  (List<Map<String,Object>>) llist.scan();
-			for (Map<String,Object> mapItem : scanList) {
-				console.debug("Map Item" + mapItem );
+			scanList =  (List<Map<String,Object>>) llist.scan();
+			if( console.debugIsOn() ) {
+				for (Map<String,Object> mapItem : scanList) {
+					console.debug("Map Item" + mapItem );
+				}
 			}
 
 		} catch (Exception e){
@@ -163,6 +163,8 @@ public class LListOperations implements ILdtOperations {
 			console.warn("Exception: " + e);
 		}
 		console.info("Done with Site Query");
+		
+		return scanList;
 	} // end processSiteQuery()
 	
 	/**
@@ -175,23 +177,21 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processRemoveExpired( JSONObject commandObj  ) {
+	public void processRemoveExpired( String ns, String set, String key, long expire ) {
 		System.out.println("ENTER ProcessRemoveExpired");
-
-		String userID = (String) commandObj.get("user");
-		String custID = (String) commandObj.get("set_name");
-		Long expireLong = (Long) commandObj.get("expire");
+		List<Map<String,Object>> scanList = null;
 
 		try {
-			Key userKey = new Key(this.namespace, custID, userID);
+			Key userKey = new Key(ns, set, key);
 			String siteListBin = "Site List";
 
 			// Initialize large List operator.
-			com.aerospike.client.large.LargeList llist = client.getLargeList(this.policy, userKey, siteListBin, null);
+			com.aerospike.client.large.LargeList llist = 
+					client.getLargeList(this.policy, userKey, siteListBin, null);
 
 			// Perform a Range Query -- from "MIN" to "EXPIRE"
 			Value minValue = new Value.NullValue();
-			Value maxValue = Value.get(expireLong);
+			Value maxValue = Value.get(expire);
 
 			List<Map<String,Object>> rangeList =  (List<Map<String,Object>>) llist.range( minValue, maxValue );
 
@@ -206,17 +206,19 @@ public class LListOperations implements ILdtOperations {
 				System.out.println("Removing Map Item(" + mapItem + ") From the LLIST." );
 				llist.remove(Value.getAsMap(mapItem));
 			}	
-
-			System.out.println("Checking Results after a REMOVE EXPIRE");
-			// Validate Results with a Scan:
-			List<Map<String,Object>> scanList =  (List<Map<String,Object>>) llist.scan();
-			if (scanList.size() > 0 ) {
-				console.debug("Showing Remaining Items after Expire.");
-				for (Map<String,Object> mapItem : scanList) {
-					console.debug("Map Item" + mapItem );
+			
+			if( console.debugIsOn() ) {
+				System.out.println("Checking Results after a REMOVE EXPIRE");
+				// Validate Results with a Scan:
+				scanList = (List<Map<String,Object>>) llist.scan();
+				if (scanList.size() > 0 ) {
+					console.debug("Showing Remaining Items after Expire.");
+					for (Map<String,Object> mapItem : scanList) {
+						console.debug("Map Item" + mapItem );
+					}
+				} else {
+					console.info("NO Objects from Scan: Nothing left after Expire.");
 				}
-			} else {
-				console.info("NO Objects from Scan: Nothing left after Expire.");
 			}
 
 		} catch (Exception e){

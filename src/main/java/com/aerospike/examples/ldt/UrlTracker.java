@@ -7,6 +7,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.apache.commons.cli.CommandLine;
@@ -31,7 +32,8 @@ import com.aerospike.client.policy.WritePolicy;
  * that manages customer data, user data and URL Site Visit data.
  * 
  * Overview:
- * There are many User Records per Customer Set
+ * 
+ * There are many User Records per Customer Set:
     Each User Data Record contains:
     - Key (user id)
     - User Info
@@ -166,7 +168,6 @@ public class UrlTracker {
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
-
 	} // end processNewUser()
 
 
@@ -179,10 +180,18 @@ public class UrlTracker {
 	private void processNewSiteVisit( JSONObject commandObj  ) {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
+		SiteVisitEntry sve = 
+				new SiteVisitEntry(console, commandObj, namespace, 0);
+		
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
-		// (*) LMAP, with the unique value on "expire" value.		
-		ldtOps.processNewSiteVisit(commandObj);
+		// (*) LMAP, with the unique value on "expire" value.
+		try {
+			sve.toStorage(client, namespace, ldtOps);
+		} catch (Exception e) {
+			e.printStackTrace();
+			console.warn("Exception: " + e);
+		}
 	} // end processNewSiteVisit()
 
 
@@ -192,13 +201,18 @@ public class UrlTracker {
 	 * @param commandObj
 	 * @param params
 	 */
-	private void processSiteQuery( JSONObject commandObj  ) {
-		System.out.println("ENTER ProcessSiteQuery");
+	private void processSiteQuery( String ns, String set, String key ) {
+		console.debug("ENTER ProcessSiteQuery");
+		
+		List<Map<String,Object>> scanList = null;
 		
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
 		// (*) LMAP, with the unique value on "expire" value.	
-		ldtOps.processSiteQuery(commandObj);
+		scanList = ldtOps.processSiteQuery(ns, set, key);
+		
+		System.out.println("Scan Result:" + scanList );
+		
 	} // end processSiteQuery()
 	
 	/**
@@ -207,13 +221,12 @@ public class UrlTracker {
 	 * @param commandObj
 	 * @param params
 	 */
-	private void processSetQuery( JSONObject commandObj  ) {
+	private void processSetQuery( String ns, String set ) {
 		console.debug("ENTER ProcessSetQuery");
 
-		String custID = (String) commandObj.get("set_name");
 		try {
 			ScanSet scanSet = new ScanSet( console );
-			scanSet.runScan(client, this.namespace, custID);
+			scanSet.runScan(client, ns, set);
 		} catch (Exception e){
 			e.printStackTrace();
 			console.warn("Exception: " + e);
@@ -280,13 +293,14 @@ public class UrlTracker {
 	 * @param commandObj
 	 * @param params
 	 */
-	private void processRemoveExpired( JSONObject commandObj  ) {
-		System.out.println("ENTER ProcessRemoveExpired");
+	private void processRemoveExpired(String ns, String set, String key,
+			long expire) {
+		console.debug("ENTER ProcessRemoveExpired");
 		
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
 		// (*) LMAP, with the unique value on "expire" value.	
-		ldtOps.processRemoveExpired(commandObj);
+		ldtOps.processRemoveExpired(ns, set, key, expire);
 	} // processRemoveExpired()
 
 	public static void main(String[] args) throws AerospikeException {
@@ -410,9 +424,9 @@ public class UrlTracker {
 		try {
 			// Create an LDT Ops var for the type of LDT we're using:
 			if ("LLIST".equals(ldtType)) {
-				this.ldtOps = new LListOperations( client, namespace, set, console );
+				this.ldtOps = new LListOperations( client, console );
 			} else 	if ("LMAP".equals(ldtType)) {
-				this.ldtOps = new LMapOperations( client, namespace, set, console );
+				this.ldtOps = new LMapOperations( client, console );
 			} else {
 				console.error("Can't continue without a valid LDT type.");
 				return;
@@ -485,6 +499,10 @@ public class UrlTracker {
 			Random random = new Random();
 			int customerSeed = 0;
 			int userSeed = 0;
+			String ns = namespace;
+			String set = null;
+			String key = null;
+			Long expire = 0L;
 			console.info("Done with Load.  Starting Site Visit Generation.");
 			for (i = 0; i < generateCount; i++) {
 				customerSeed = random.nextInt(customers);
@@ -495,12 +513,26 @@ public class UrlTracker {
 				
 				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
 						userRec.getUserID(), i);
-				sve.toStorage(client, ldtOps);
+				sve.toStorage(client, namespace, ldtOps);
+				
+				set = custRec.getCustomerID();
+				key = userRec.getUserID();
 				
 				if( i % 10000 == 0 ) {
-					console.info("Stored Cust(%d); User(%d) SVE(%d)", customerSeed, userSeed, i);
+					console.info("Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+							customerSeed, set, userSeed, key, i);
 				}
-					
+				if( i % 20000 == 0 ) {
+					console.info("QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+							customerSeed, set, userSeed, key, i);
+					processSiteQuery(ns, set, key);
+				}
+				if( i % 30000 == 0 ) {
+					console.info("CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+							customerSeed, set, userSeed, key, i);
+					expire = System.nanoTime();
+					processRemoveExpired( ns, set, key, expire );
+				}			
 			} // end for each generateCount
 			
 		} catch (Exception e) {
@@ -536,9 +568,9 @@ public class UrlTracker {
 		try {	
 			// Create an LDT Ops var for the type of LDT we're using:
 			if ("LLIST".equals(ldtType)) {
-				this.ldtOps = new LListOperations( client, namespace, set, console );
+				this.ldtOps = new LListOperations( client, console );
 			} else 	if ("LMAP".equals(ldtType)) {
-				this.ldtOps = new LMapOperations( client, namespace, set, console );
+				this.ldtOps = new LMapOperations( client, console );
 			} else {
 				console.error("Can't continue without a valid LDT type.");
 				return;
@@ -562,6 +594,12 @@ public class UrlTracker {
 				console.debug("The " + i + " element of the array: "+commands.get(i));
 			}
 			Iterator i = commands.iterator();
+			
+			// Vars to reuse in each case.
+			String ns = namespace;
+			String set = null;
+			String key = null;
+			Long expire;
 
 			// take each value from the json array separately
 			while (i.hasNext()) {
@@ -576,11 +614,17 @@ public class UrlTracker {
 				} else if (commandStr.equals( "new_site_visit")) {
 					processNewSiteVisit( commandObj );
 				} else if (commandStr.equals( "query_user")) {
-					processSiteQuery( commandObj );
+					set = (String) commandObj.get("set_name");
+					key = (String) commandObj.get("user_name");
+					processSiteQuery( ns, set, key );
 				} else if (commandStr.equals( "query_set")) {
-					processSetQuery( commandObj );
+					set = (String) commandObj.get("set_name");
+					processSetQuery( ns, set );
 				} else if (commandStr.equals( "remove_expired")) {
-					processRemoveExpired( commandObj );
+					set = (String) commandObj.get("set_name");
+					key = (String) commandObj.get("user_name");
+					expire = (Long) commandObj.get("expire");
+					processRemoveExpired( ns, set, key, expire );
 				} else if (commandStr.equals( "remove_record")) {
 					processRemoveRecord( commandObj );
 				} else if (commandStr.equals( "remove_all_records")) {

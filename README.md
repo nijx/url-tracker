@@ -1,6 +1,6 @@
 #URL Tracker Example
 
-## Overview
+## Overview (3)
 
 This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit"
 values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.
@@ -146,13 +146,24 @@ There are several commands ("command element" instances) that are used for inser
 
 ## Data File Example
 
+This file represents the current example commands.json file that is found
+in this package.
+
 
 ```
 {
-    "command_file": "DataFile_1",
+    "command_file": "DataFile_1.2",
     "commands": [
+    {   "command": "new_customer",
+            "customer": {
+                "customer_id": "Indigo",
+                "contact": "Mr. Raj",
+                "set_name": "CustSetOne" 
+                }
+    },
     {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Bob",
                 "email": "bob@www.aerospike.com",
@@ -160,9 +171,10 @@ There are several commands ("command element" instances) that are used for inser
                 "address": "1313 Mockingbird Lane",
                 "company": "aerospike"
             }
-	},
-    {
+    },
+        {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Sue",
                 "email": "sue@www.aerospike.com",
@@ -170,9 +182,10 @@ There are several commands ("command element" instances) that are used for inser
                 "address": "1313 Mockingbird Lane",
                 "company": "aerospike"
             }
-	},
-    {
+    },
+        {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Joe",
                 "email": "joe@www.aerospike.com",
@@ -180,9 +193,10 @@ There are several commands ("command element" instances) that are used for inser
                 "address": "1313 Mockingbird Lane",
                 "company": "aerospike"
             }
-    },
-	{
+        },
+    {
             "command": "new_user",
+            "set_name": "CustSetOne" ,
             "user": {
                 "name": "Rick",
                 "email": "rick@www.aerospike.com",
@@ -190,11 +204,12 @@ There are several commands ("command element" instances) that are used for inser
                 "address": "1313 Mockingbird Lane",
                 "company": "aerospike"
             }
-    },
-    {
+        },
+        {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob",
             "visit_info": {
-                "user_name": "Bob",
                 "url": "www.aerospike.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -202,11 +217,12 @@ There are several commands ("command element" instances) that are used for inser
                 "date": 5000,
                 "expire": 6000
             }
-    },
-    {
+        },
+        {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Sue",
             "visit_info": {
-                "user_name": "Sue",
                 "url": "www.aerospike.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -214,11 +230,12 @@ There are several commands ("command element" instances) that are used for inser
                 "date": 5001,
                 "expire": 6001
             }
-    },
-    {
+        },
+        {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Sue",
             "visit_info": {
-                "user_name": "Sue",
                 "url": "www.microsoft.com",
                 "referrer": "xyz",
                 "page_title": "1a2b3c",
@@ -226,11 +243,13 @@ There are several commands ("command element" instances) that are used for inser
                 "date": 5010,
                 "expire": 6010
             }
-    },
-    {
+        },
+        {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob",
             "visit_info": {
-                "user_name": "Bob",
+
                 "url": "www.google.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -238,11 +257,12 @@ There are several commands ("command element" instances) that are used for inser
                 "date": 5020,
                 "expire": 6020
             }
-    },
-    {
+        },
+        {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+            "user_name": "Rick",
             "visit_info": {
-                "user_name": "Rick",
                 "url": "www.aerospike.com",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -250,11 +270,12 @@ There are several commands ("command element" instances) that are used for inser
                 "date": 5000,
                 "expire": 6000
             }
-    },
-    {
+        },
+        {
             "command": "new_site_visit",
+            "set_name": "CustSetOne" ,
+             "user_name": "Bob",
             "visit_info": {
-                "user_name": "Bob",
                 "url": "www.aerospike.com/documentation",
                 "referrer": "xyz",
                 "page_title": "abc",
@@ -262,18 +283,25 @@ There are several commands ("command element" instances) that are used for inser
                 "date": 5030,
                 "expire": 6030
             }
-    },
-    {
+        },
+        {
             "command": "query_user",
-            "user": "Bob"
-    },
-    {
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob"
+        },
+        {
             "command": "remove_expired",
-            "user": "Bob",
+            "set_name": "CustSetOne" ,
+            "user_name": "Bob",
             "expire": 5500
-    }
+        },
+        {
+            "command": "query_set",
+            "set_name": "CustSetOne"
+        },
     ]
 }
+
 
 ```
 

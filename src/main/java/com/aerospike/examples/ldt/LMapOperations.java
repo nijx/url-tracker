@@ -2,6 +2,7 @@ package com.aerospike.examples.ldt;
 
 //import java.io.Console;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -32,8 +33,6 @@ import com.aerospike.client.task.RegisterTask;
 */
 public class LMapOperations implements ILdtOperations {
 	private AerospikeClient client;
-	private String namespace;
-	private String set;
 	private WritePolicy writePolicy;
 	private Policy policy;
 	protected Console console;
@@ -54,13 +53,11 @@ public class LMapOperations implements ILdtOperations {
 	 * @param console
 	 * @throws AerospikeException
 	 */
-	public LMapOperations(AerospikeClient client, String namespace, String set, 
-			Console console) throws AerospikeException 
+	public LMapOperations(AerospikeClient client, Console console) 
+			throws AerospikeException 
 	{
 
 		this.client = client;
-		this.namespace = namespace;
-		this.set = set; // Set will be overridden by the data.
 		this.writePolicy = new WritePolicy();
 		this.writePolicy.timeout = 1000;
 		this.writePolicy.maxRetries = 0;
@@ -109,7 +106,9 @@ public class LMapOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void storeSiteObject(SiteVisitEntry sve, Map<String,Object> siteObjMap  ) {
+	public void storeSiteObject(SiteVisitEntry sve, String ns,
+			Map<String,Object> siteObjMap  ) 
+	{
 		console.info("ENTER storeObject:");
 
 //		// Extract the values from the JSON object
@@ -141,72 +140,92 @@ public class LMapOperations implements ILdtOperations {
 //			System.out.println("Exception: " + e);
 //		}
 	} // end storeSiteObject()
-
+	
 	/**
 	 * Enter a new Site Visit object in the collection of site visits for
-	 * a particular user.  Manage the Site Visit Objects (in LMAP)
-	 *  by Expire Time.
+	 * a particular user.  Order the Site Visit Objects by Expire Time.
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processNewSiteVisit( JSONObject commandObj  ) {
-		console.info("ENTER ProcessNewSiteVisit:");
-
-		JSONObject siteObj = (JSONObject) commandObj.get("visit_info");
-
-		// Extract the values from the JSON object
-		String nameStr = (String) siteObj.get("user_name");
-		String urlStr = (String) siteObj.get("url");
-		String refStr = (String) siteObj.get("referrer");
-		String pageStr = (String) siteObj.get("page_title");
-		Long dateLong = (Long) siteObj.get("date");
-		Long expireLong = (Long) siteObj.get("expire");
-		String customerStr = (String) siteObj.get("set_name");
+	public void processNewSiteVisit( JSONObject commandObj, String ns  ) {
+		console.debug("ENTER ProcessNewSiteVisit:");
 		
-		// The Customer ID (custID) is the Aerospike SET name, and userID is the
-		// key for the record (the user data and the site visit list).
-		String userID = nameStr;
-		String custID = customerStr;
+		SiteVisitEntry sve = 
+				new SiteVisitEntry(console, commandObj, ns, 0);
 
 		try {
-
-			Key userKey = new Key(this.namespace, custID, userID);
-			String siteMapBin = "Site Map";
-
-			// Create a MAP object that will hold the Site Visit value.
-			// For THIS example, we're going to put the Site Visit object into
-			// a Large Map (LMAP), so we're going to use as the LMAP Name value
-			// the Expire Date (an integer).  When it comes time to find a
-			// expire values that are past a deadline, we will SCAN the entire 
-			// LMAP and use a UDF Filter to locate those site visit maps that
-			// contain expired values.
-			HashMap<String,Object> siteObjMap = new HashMap<String,Object>();
-			siteObjMap.put("key", expireLong);
-			siteObjMap.put("name", nameStr);
-			siteObjMap.put("URL", urlStr);
-			siteObjMap.put("referrer", refStr);
-			siteObjMap.put("page_title", pageStr);
-			siteObjMap.put("date", dateLong);
-
-			// Initialize the large map (LMAP) operator.
-			com.aerospike.client.large.LargeMap lmap = 
-					client.getLargeMap(this.policy, userKey, siteMapBin, null);
-
-			// Package up the new NAME and VALUE pair and add them to the LMAP.  
-			// The NAME is the expire number and the VALUE is the SiteObject Map.
-			// Note that the "Value.get()" operation is NOT used to construct
-			// a Value that holdes a map.  Instead it's Value.getAsMap().		
-			Value nameValue = Value.get(expireLong);
-			Value mapValue = Value.getAsMap(siteObjMap);
-	
-			// Write the name/value pair into the LMAP holding site-visits.
-			lmap.put(nameValue, mapValue);			
-
+			sve.toStorage(client, ns, this);		
 		} catch (Exception e){
 			e.printStackTrace();
 			System.out.println("Exception: " + e);
 		}
 	} // end processNewSiteVisit()
+
+//	/**
+//	 * Enter a new Site Visit object in the collection of site visits for
+//	 * a particular user.  Manage the Site Visit Objects (in LMAP)
+//	 *  by Expire Time.
+//	 * @param commandObj
+//	 * @param params
+//	 */
+//	public void processNewSiteVisit( JSONObject commandObj  ) {
+//		console.info("ENTER ProcessNewSiteVisit:");
+//
+//		JSONObject siteObj = (JSONObject) commandObj.get("visit_info");
+//
+//		// Extract the values from the JSON object
+//		String nameStr = (String) siteObj.get("user_name");
+//		String urlStr = (String) siteObj.get("url");
+//		String refStr = (String) siteObj.get("referrer");
+//		String pageStr = (String) siteObj.get("page_title");
+//		Long dateLong = (Long) siteObj.get("date");
+//		Long expireLong = (Long) siteObj.get("expire");
+//		String customerStr = (String) siteObj.get("set_name");
+//		
+//		// The Customer ID (custID) is the Aerospike SET name, and userID is the
+//		// key for the record (the user data and the site visit list).
+//		String userID = nameStr;
+//		String custID = customerStr;
+//
+//		try {
+//
+//			Key userKey = new Key(this.namespace, custID, userID);
+//			String siteMapBin = "Site Map";
+//
+//			// Create a MAP object that will hold the Site Visit value.
+//			// For THIS example, we're going to put the Site Visit object into
+//			// a Large Map (LMAP), so we're going to use as the LMAP Name value
+//			// the Expire Date (an integer).  When it comes time to find a
+//			// expire values that are past a deadline, we will SCAN the entire 
+//			// LMAP and use a UDF Filter to locate those site visit maps that
+//			// contain expired values.
+//			HashMap<String,Object> siteObjMap = new HashMap<String,Object>();
+//			siteObjMap.put("key", expireLong);
+//			siteObjMap.put("name", nameStr);
+//			siteObjMap.put("URL", urlStr);
+//			siteObjMap.put("referrer", refStr);
+//			siteObjMap.put("page_title", pageStr);
+//			siteObjMap.put("date", dateLong);
+//
+//			// Initialize the large map (LMAP) operator.
+//			com.aerospike.client.large.LargeMap lmap = 
+//					client.getLargeMap(this.policy, userKey, siteMapBin, null);
+//
+//			// Package up the new NAME and VALUE pair and add them to the LMAP.  
+//			// The NAME is the expire number and the VALUE is the SiteObject Map.
+//			// Note that the "Value.get()" operation is NOT used to construct
+//			// a Value that holdes a map.  Instead it's Value.getAsMap().		
+//			Value nameValue = Value.get(expireLong);
+//			Value mapValue = Value.getAsMap(siteObjMap);
+//	
+//			// Write the name/value pair into the LMAP holding site-visits.
+//			lmap.put(nameValue, mapValue);			
+//
+//		} catch (Exception e){
+//			e.printStackTrace();
+//			System.out.println("Exception: " + e);
+//		}
+//	} // end processNewSiteVisit()
 
 
 	/**
@@ -215,14 +234,15 @@ public class LMapOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processSiteQuery( JSONObject commandObj  ) {
+	public List<Map<String,Object>> processSiteQuery( String ns, String set, String key ) {
 		System.out.println("ENTER ProcessSiteQuery");
-
-		String userID = (String) commandObj.get("user");
-		String custID = (String) commandObj.get("set_name");
+		
+		// Even though we get the results as a large map, we have to return the
+		// objects as a list.
+		List<Map<String,Object>> resultList = null;
 
 		try {
-			Key userKey = new Key(this.namespace, custID, userID);
+			Key userKey = new Key(ns, set, key);
 			String siteMapBin = "Site Map";
 
 			// Initialize large map operator.
@@ -244,6 +264,8 @@ public class LMapOperations implements ILdtOperations {
 			console.warn("Exception: " + e);
 		}
 		System.out.println("Done with Site Query");
+		
+		return resultList;
 	} // end processSiteQuery()
 	
 	/**
@@ -252,15 +274,11 @@ public class LMapOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processRemoveExpired( JSONObject commandObj  ) {
+	public void processRemoveExpired(  String ns, String set, String key, long expire ) {
 		System.out.println("ENTER ProcessRemoveExpired");
 
-		String userID = (String) commandObj.get("user");
-		String custID = (String) commandObj.get("set_name");
-		Long expireLong = (Long) commandObj.get("expire");
-
 		try {
-			Key userKey = new Key(this.namespace, custID, userID);
+			Key userKey = new Key(ns, set, key);
 			String siteMapBin = "Site Map";
 
 			// Initialize large List operator.
@@ -269,7 +287,7 @@ public class LMapOperations implements ILdtOperations {
 
 			// Perform a full scan of ALL of the map objects, but employ a
 			// UDF filter to find ONLY those objects that have expired.
-			Value expireCutoffValue = Value.get(expireLong);
+			Value expireCutoffValue = Value.get(expire);
 			Value udfFilterValue = Value.get(udfFilter);
 			Map<Long,Map<String,Object>> expireMap =  
 					(Map<Long,Map<String,Object>>) lmap.filter( serverUdfPath, udfFilterValue, expireCutoffValue );
@@ -300,10 +318,10 @@ public class LMapOperations implements ILdtOperations {
 			if ( mapResult.size() > 0 ) {
 				console.info("Showing Scan Result");
 				for (Entry<Long,Map<String,Object>> entry : mapResult.entrySet() ){
-					expireLong = (Long) entry.getKey();
+					expire = (Long) entry.getKey();
 					Map<String,Object> siteObj = (Map<String,Object>) entry.getValue();
 					console.info("Site Entry: Expire(%l); SiteObj(%s)", 
-							expireLong, siteObj.toString());		
+							expire, siteObj.toString());		
 				}
 			} else {
 				console.info("LMAP Scan Result is EMPTY");
