@@ -83,23 +83,26 @@ There are several additional (supportive) operations:
 (*) Remove a record (by key)
 (*) Remove all records in a customer set
 
+Invocation Examples:
+(*) -h 172.16.114.164 -g 50000 -c 10 -r 100 -v 500
+
 @author toby
 */
 public class UrlTracker {
+	
+	private DbOps dbOps; // Interact with Aerospike.
+	
 	private AerospikeClient client;
 	private String seedHost;
 	private int port;
 	private String namespace;
 	private String set;
-	private String inputFileName;
+	private String inputFileName; // for JSON commands
 	private WritePolicy writePolicy;
 	private Policy policy;
-	private int generateData;
+	private int generateCount;
 
 	protected Console console;
-	
-	// Whichever type LDT we're using, we'll drive with this var.
-	protected ILdtOperations ldtOps;
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
@@ -111,17 +114,20 @@ public class UrlTracker {
 	 * @throws AerospikeException
 	 */
 	public UrlTracker(String host, int port, String namespace, String set, 
-			String fileName, Console console) throws AerospikeException 
+			String fileName, String ldtType, Console console) 
+					throws AerospikeException 
 	{
-		System.out.println("OPEN AEROSPIKE CLIENT");
-		this.client = new AerospikeClient(host, port);
+		
+		this.dbOps = new DbOps(console, host, port, namespace, ldtType);
+		
+		this.client = dbOps.getClient();
 
 		this.seedHost = host;
 		this.port = port;
 		this.namespace = namespace;
 		this.set = set; // Set will be overridden by the data.
 		this.inputFileName = fileName;
-		this.generateData = 0;  // If non-zero, then generate data rather than
+		this.generateCount = 0;  // If non-zero, then generate data rather than
 								// read from JSON file.
 		
 		this.writePolicy = new WritePolicy();
@@ -187,100 +193,12 @@ public class UrlTracker {
 		// (*) LLIST, with the ordering value on "expire" value.
 		// (*) LMAP, with the unique value on "expire" value.
 		try {
-			sve.toStorage(client, namespace, ldtOps);
+			sve.toStorage(client, namespace, dbOps.getLdtOps());
 		} catch (Exception e) {
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
 	} // end processNewSiteVisit()
-
-
-	/**
-	 * Scan the user's Site Visit List.  Get back a List of Maps that we
-	 * can peruse and print.
-	 * @param commandObj
-	 * @param params
-	 */
-	private void processSiteQuery( String ns, String set, String key ) {
-		console.debug("ENTER ProcessSiteQuery");
-		
-		List<Map<String,Object>> scanList = null;
-		
-		// We have multiple implementations of this operation:
-		// (*) LLIST, with the ordering value on "expire" value.
-		// (*) LMAP, with the unique value on "expire" value.	
-		scanList = ldtOps.processSiteQuery(ns, set, key);
-		
-		System.out.println("Scan Result:" + scanList );
-		
-	} // end processSiteQuery()
-	
-	/**
-	 * Scan the entire SET for a customer.  Get back a set of Records that we
-	 * can peruse and print.
-	 * @param commandObj
-	 * @param params
-	 */
-	private void processSetQuery( String ns, String set ) {
-		console.debug("ENTER ProcessSetQuery");
-
-		try {
-			ScanSet scanSet = new ScanSet( console );
-			scanSet.runScan(client, ns, set);
-		} catch (Exception e){
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-		console.debug("Done with Query");
-	} // end processSetQuery()
-	
-	/**
-	 * Remove a specific record.
-	 * @param commandObj
-	 */
-	private void processRemoveRecord( JSONObject commandObj  ) {
-		console.debug("ENTER ProcessRemoveRecord");
-		
-		String userID = (String) commandObj.get("user");
-		String custID = (String) commandObj.get("set_name");
-
-		try {
-			Key userKey = new Key(this.namespace, custID, userID);
-			client.delete( this.writePolicy, userKey );
-			
-		} catch (Exception e){
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-		console.debug("Done with Query");
-	} // end processRemoveRecord()
-	
-	/**
-	 * Remove all records for a given set.   Do a scan, and then for each
-	 * record in the scan set, issue a delete.
-	 * @param commandObj
-	 */
-	private void processRemoveAllRecords( JSONObject commandObj  ) {
-		console.debug("ENTER processRemoveAllRecords");
-
-		String custID = (String) commandObj.get("set_name");
-		List<Record> recordList;
-
-		try {
-			ScanSet scanSet = new ScanSet( console );
-			recordList = scanSet.runScan(client, this.namespace, custID);
-			
-			// NOTE: These operations will be activated shortly.
-			// showRecordList( recordList );	
-			// deleteRecordList( recordList );
-			
-		} catch (Exception e){
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-		console.debug("Done with Query");
-	} // end processRemoveAllRecords()
-	
 	
 
 	/**
@@ -300,12 +218,12 @@ public class UrlTracker {
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
 		// (*) LMAP, with the unique value on "expire" value.	
-		ldtOps.processRemoveExpired(ns, set, key, expire);
+		dbOps.getLdtOps().processRemoveExpired(ns, set, key, expire);
 	} // processRemoveExpired()
 
 	public static void main(String[] args) throws AerospikeException {
 		Console console = new Console();
-		console.info("Starting in Main (1.1.6) \n");
+		console.info("Starting in Main (1.1.7) \n");
 
 		try {
 			Options options = new Options();
@@ -316,10 +234,13 @@ public class UrlTracker {
 			options.addOption("u", "usage", false, "Print usage.");
 			options.addOption("f", "filename", true, "Input File (default: commands.json)");
 			options.addOption("t", "type", true, "LDT Type (default: LLIST)");
-			options.addOption("g", "generate", true, "Generate input data (default: false)");
+			options.addOption("g", "generate", true, "Generate input data, with N update iterations (default: 0)");
 			options.addOption("c", "customer", true, "Number of customer records (default: 10)");
 			options.addOption("r", "records", true, "Ave number of users per customer (default: 20)");
 			options.addOption("v", "visits", true, "Ave number of visits per user (default: 500)");
+			
+			options.addOption("C", "CLEAN", true, "CLEAN all records at start of run (default 1)");
+			options.addOption("R", "REMOVE", true, "REMOVE all records at END of run (default 1)");
 
 			CommandLineParser parser = new PosixParser();
 			CommandLine cl = parser.parse(options, args, false);
@@ -343,6 +264,13 @@ public class UrlTracker {
 		
 			String generateString = cl.getOptionValue("g", "0");
 			int generateCount = Integer.parseInt(generateString);
+			
+			String cleanString = cl.getOptionValue("C", "1");
+			boolean clean  = Integer.parseInt(cleanString) == 1;
+			
+			String removeString = cl.getOptionValue("R", "1");
+			boolean remove  = Integer.parseInt(removeString) == 1;
+
 
 			console.info("Host: " + host);
 			console.info("Port: " + port);
@@ -354,6 +282,8 @@ public class UrlTracker {
 			console.info("User Records: " + records);
 			console.info("User Site Visit Records: " + visits);
 			console.info("Generate: " + generateCount );
+			console.info("Clean Before: " + clean );
+			console.info("Remove After: " + remove);
 
 			@SuppressWarnings("unchecked")
 			List<String> cmds = cl.getArgList();
@@ -371,14 +301,20 @@ public class UrlTracker {
 				return;
 			}
 
-			UrlTracker tracker = new UrlTracker(host, port, namespace, set, fileName, console );
+			UrlTracker tracker = 
+				new UrlTracker(host, port, namespace, set, fileName, ldtType, console );
 			if (generateCount > 0){
+				if ( clean ) {
+					tracker.cleanDB(customers, records);
+				}
 				tracker.generateCommands( ldtType, generateCount, customers,
 						records, visits );
+				if ( remove ) {
+					tracker.cleanDB(customers, records);
+				}
 			} else {
-				tracker.processCommands( ldtType );
+				tracker.processJSONCommands( ldtType );
 			}
-
 
 		} catch (Exception e) {
 			console.error("Critical error::" + e.toString());
@@ -413,6 +349,51 @@ public class UrlTracker {
 	 * 
 	 * @throws Exception
 	 */
+	public void cleanDB( int customers, int userRecords )  {
+		
+		console.info("Clean DB : Cust(%d) Users(%d) ", customers, userRecords);
+		
+		// For every Set, Remove every Record.  Don't complain if the records
+		// are not there.
+		int i = 0;
+		UserRecord userRec = null;
+		CustomerRecord custRec = null;
+		int errorCounter = 0;
+		try {
+			for (i = 0; i < customers; i++) {
+				custRec = new CustomerRecord(console, i);
+				custRec.remove(client, namespace);
+
+				for (int j = 0; j < userRecords; j++) {
+					userRec = new UserRecord(console, custRec.getCustomerID(), j);
+					userRec.remove(client, namespace);
+				} // end for each user record	
+			} // end for each customer
+			
+		} catch (Exception e) {
+			errorCounter++;
+		}
+
+		console.info("End Clean.  ErrorCount(%d)", errorCounter);
+	} // end cleanDB()
+	
+	/**
+	 * generateCommands():  Rather than READ the commands from a file, we 
+	 * instead GENERATE the commands and then act on them.  We use a random
+	 * distribution of operations
+	 * 
+	 * (*) NewUser <data>: Add a new User Record to Set N
+	 * (*) NewEntry <data>: Add a new Site Visit entry to User Record in Set N
+	 * (*) QueryUser <data>: Fetch all of the Site Data for a User in Set N
+	 * (*) RemoveExpired: Remove all Site entries that have expired
+	 * 
+	 * as well as the minor commands:
+	 * (-) ScanSet: Show all records in the customer set
+	 * (-) RemoveRecord: Remove a record, by key
+	 * (-) RemoveAllRecords: Remove all records in a customer set
+	 * 
+	 * @throws Exception
+	 */
 	public void generateCommands( String ldtType, int generateCount,
 			int customers, int userRecords, int visitEntries ) 
 	{
@@ -420,21 +401,7 @@ public class UrlTracker {
 		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) Visits(%d)", 
 				generateCount, customers, userRecords, visitEntries);
 		
-		// Set up the specific type of LDT we're going to use (LLIST or LMAP).
-		try {
-			// Create an LDT Ops var for the type of LDT we're using:
-			if ("LLIST".equals(ldtType)) {
-				this.ldtOps = new LListOperations( client, console );
-			} else 	if ("LMAP".equals(ldtType)) {
-				this.ldtOps = new LMapOperations( client, console );
-			} else {
-				console.error("Can't continue without a valid LDT type.");
-				return;
-			}
-		} 	catch (Exception e){
-			System.out.println("GENERAL EXCEPTION:" + e);
-			e.printStackTrace();
-		}
+		ILdtOperations ldtOps = dbOps.getLdtOps();
 		
 		// For a given number of "generateCount" iterations, we're going to 
 		// generate a semi-random set of objects that correspond to Customers, 
@@ -461,33 +428,8 @@ public class UrlTracker {
 				for (int j = 0; j < userRecords; j++) {
 					userRec = new UserRecord(console, custRec.getCustomerID(), j);
 					userRec.toStorage(client, namespace);
-
-//					for (int k = 0; k < visitEntries; k++) {
-//						sve = new SiteVisitEntry(console, 
-//								custRec.getCustomerID(), userRec.getUserID(), k);
-//						sve.toStorage(client, ldtOps);
-//					} // end for each site visit
 				} // end for each user record	
 			} // end for each customer
-			
-//			// When debugging -- read everything back.
-//			for (i = 0; i < customers; i++) {
-//				custRec = new CustomerRecord(console, i);
-//				record = custRec.fromStorage(client, namespace);
-//				console.debug("Found Customer Record:" + record.toString());
-//
-//				for (int j = 0; j < userRecords; j++) {
-//					userRec = new UserRecord(console, custRec.getCustomerID(), j);
-//					record =  userRec.fromStorage(client, namespace);
-//					console.debug("Found User Record:" + record.toString());
-//
-////					for (int k = 0; k < visitEntries; k++) {
-////						SiteVisitEntry sve = new SiteVisitEntry(console, 
-////								cr.getCustomerID(), ur.getUserID(), k);
-////						sve.toStorage(client, ldtOps);
-////					} // end for each site visit
-//				} // end for each user record	
-//			} // end for each customer
 			
 			// Start a steady-State insertion and expiration cycle.
 			// For "Generation Count" iterations, generate a pseudo-random
@@ -518,6 +460,7 @@ public class UrlTracker {
 				set = custRec.getCustomerID();
 				key = userRec.getUserID();
 				
+				// At predetermined milestones, perform various actions 
 				if( i % 10000 == 0 ) {
 					console.info("Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
 							customerSeed, set, userSeed, key, i);
@@ -525,7 +468,7 @@ public class UrlTracker {
 				if( i % 20000 == 0 ) {
 					console.info("QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
 							customerSeed, set, userSeed, key, i);
-					processSiteQuery(ns, set, key);
+					dbOps.printSiteVisitContents(set, key);
 				}
 				if( i % 30000 == 0 ) {
 					console.info("CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
@@ -559,22 +502,12 @@ public class UrlTracker {
 	 * 
 	 * @throws Exception
 	 */
-	public void processCommands( String ldtType ) 
+	public void processJSONCommands( String ldtType ) 
 			throws IOException, AerospikeException, ParseException  
 	{
-		System.out.println("PROCESS COMMANDS (a.b.c) \n");
-		String inputFileName = this.inputFileName;	
+		console.info("PROCESS COMMANDS :: JSON File(" + inputFileName + ")");
 
 		try {	
-			// Create an LDT Ops var for the type of LDT we're using:
-			if ("LLIST".equals(ldtType)) {
-				this.ldtOps = new LListOperations( client, console );
-			} else 	if ("LMAP".equals(ldtType)) {
-				this.ldtOps = new LMapOperations( client, console );
-			} else {
-				console.error("Can't continue without a valid LDT type.");
-				return;
-			}
 			
 			// read the json file
 			FileReader reader = new FileReader(inputFileName);
@@ -593,7 +526,6 @@ public class UrlTracker {
 			for(int i=0; i< commands.size(); i++){
 				console.debug("The " + i + " element of the array: "+commands.get(i));
 			}
-			Iterator i = commands.iterator();
 			
 			// Vars to reuse in each case.
 			String ns = namespace;
@@ -601,7 +533,8 @@ public class UrlTracker {
 			String key = null;
 			Long expire;
 
-			// take each value from the json array separately
+			// Process each value from the JSON array:
+			Iterator i = commands.iterator();
 			while (i.hasNext()) {
 				JSONObject commandObj = (JSONObject) i.next();
 				String commandStr = (String) commandObj.get("command");
@@ -616,19 +549,22 @@ public class UrlTracker {
 				} else if (commandStr.equals( "query_user")) {
 					set = (String) commandObj.get("set_name");
 					key = (String) commandObj.get("user_name");
-					processSiteQuery( ns, set, key );
+					dbOps.printSiteVisitContents(set, key );
 				} else if (commandStr.equals( "query_set")) {
 					set = (String) commandObj.get("set_name");
-					processSetQuery( ns, set );
+					dbOps.printSetContents( set );
 				} else if (commandStr.equals( "remove_expired")) {
 					set = (String) commandObj.get("set_name");
 					key = (String) commandObj.get("user_name");
 					expire = (Long) commandObj.get("expire");
 					processRemoveExpired( ns, set, key, expire );
 				} else if (commandStr.equals( "remove_record")) {
-					processRemoveRecord( commandObj );
+					set = (String) commandObj.get("set_name");
+					key = (String) commandObj.get("user_name");
+					dbOps.removeRecord(set, key );
 				} else if (commandStr.equals( "remove_all_records")) {
-					processRemoveAllRecords( commandObj );
+					set = (String) commandObj.get("set_name");
+					dbOps.removeSetRecords(set);
 				}
 			} // for each command
 

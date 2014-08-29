@@ -29,24 +29,25 @@ import com.aerospike.client.policy.ScanPolicy;
  * @author toby
  *
  */
-public class ScanSet implements ScanCallback {
+public class ScanKeySet implements ScanCallback {
 
 	private int recordCount = 0;
 	Console console;
-	ArrayList<Record> recordList;
+	ArrayList<Key> keyList;
 
-	public ScanSet(Console console) {
+	public ScanKeySet(Console console) {
 		this.console = console;
-		this.recordList = new ArrayList<Record>();
+		this.keyList = new ArrayList<Key>();
 	}
 
 	/**
-	 * Scan all nodes in parallel and read all records in a List.
+	 * Scan all nodes in parallel and return the KEYS of all of the records
+	 * in a list.
 	 * @param client
 	 * @param namespace
 	 * @param set
 	 */
-	public List<Record> runScan(AerospikeClient client, String namespace, String set) 
+	public List<Key> runScan(AerospikeClient client, String namespace, String set) 
 			throws Exception 
 	{
 		console.info("Scan parallel: namespace=" + namespace + " set=" + set);
@@ -61,14 +62,12 @@ public class ScanSet implements ScanCallback {
 		console.info("Elapsed time: " + seconds + " seconds");
 		double performance = Math.round((double)recordCount / seconds);
 		console.info("Records/second: " + performance);
-		return recordList;
+		return keyList;
 	} // end runScan()
-
-
 	
 	/**
 	 * Called from the scan operator for each record.  We use this to accumulate
-	 * the contents in a list.
+	 * the contents of each record KEY in a list.
 	 * 
 	 * @param key : record identifier
 	 * @param record : record body
@@ -77,11 +76,11 @@ public class ScanSet implements ScanCallback {
 		recordCount++;
 		
 		console.info("Found Record: Key("+key+") Record(" + record + ")");
-		recordList.add(record);
+		keyList.add(key);
 
 		if ((recordCount % 10000) == 0) {
 			console.info("Records " + recordCount);
 		}
 	} // end scanCallback()
 	
-} // end class ScanSet
+} // end class ScanKeySet

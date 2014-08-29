@@ -137,7 +137,9 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public List<Map<String,Object>> processSiteQuery( String ns, String set, String key ) {
+	public List<Map<String,Object>> 
+	processSiteQuery( String ns, String set, String key ) 
+	{
 		System.out.println("ENTER ProcessSiteQuery");
 		
 		List<Map<String,Object>> scanList = null;
@@ -193,7 +195,8 @@ public class LListOperations implements ILdtOperations {
 			Value minValue = new Value.NullValue();
 			Value maxValue = Value.get(expire);
 
-			List<Map<String,Object>> rangeList =  (List<Map<String,Object>>) llist.range( minValue, maxValue );
+			List<Map<String,Object>> rangeList =  
+					(List<Map<String,Object>>) llist.range( minValue, maxValue );
 
 			// Process all items that are returned from the range query
 			for (Map<String,Object> mapItem : rangeList) {
@@ -207,17 +210,18 @@ public class LListOperations implements ILdtOperations {
 				llist.remove(Value.getAsMap(mapItem));
 			}	
 			
-			if( console.debugIsOn() ) {
-				System.out.println("Checking Results after a REMOVE EXPIRE");
+//			if( console.debugIsOn() ) {
+			if ( true ) {
+				System.out.println("Checking Results after a REMOVE EXPIRE::" + expire);
 				// Validate Results with a Scan:
 				scanList = (List<Map<String,Object>>) llist.scan();
 				if (scanList.size() > 0 ) {
 					console.debug("Showing Remaining Items after Expire.");
 					for (Map<String,Object> mapItem : scanList) {
-						console.debug("Map Item" + mapItem );
+						System.out.println("Map Item:: " + mapItem );
 					}
 				} else {
-					console.info("NO Objects from Scan: Nothing left after Expire.");
+					System.out.println("NO Objects from Scan: Nothing left after Expire.");
 				}
 			}
 

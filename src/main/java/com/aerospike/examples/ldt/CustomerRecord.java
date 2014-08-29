@@ -173,6 +173,45 @@ public class CustomerRecord {
 		return record;
 	}
 	
+	/**
+	 * Given a customer object, remove it from the set (using the key custID).
+	 * 
+	 * @param client
+	 * @param nameSpace
+	 * @return
+	 * @throws Exception
+	 */
+	public Record  remove(AerospikeClient client, String namespace) 
+			throws Exception 
+	{
+		Record record = null;
+
+		// A slightly strange case where the customerID is BOTH the set name
+		// and the Key for the customer record.
+		String setName = this.customerID;
+		String recordKey = this.customerID;
+		
+		try {
+			// Note that custID is BOTH the name of the Aerospike SET and it
+			// is the KEY of the Singleton Record for Customer info.
+			Key key        = new Key(namespace, setName, recordKey);
+
+			// Remove the record
+			console.debug("Remove Record: namespace(%s) set(%s) key(%s)",
+					key.namespace, key.setName, key.userKey);
+			client.delete(this.writePolicy, key);
+			
+		} catch (Exception e){
+			e.printStackTrace();
+			console.warn("Exception: " + e);
+		}
+		
+		return record;
+	} // end remove()
+	
+	/**
+	 * Make our customer record more readable.
+	 */
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format("CustName(%s)", customerName));

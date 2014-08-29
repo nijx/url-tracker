@@ -16,9 +16,6 @@
  */
 package com.aerospike.examples.ldt;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.json.simple.JSONObject;
 
 import com.aerospike.client.AerospikeClient;
@@ -40,14 +37,15 @@ public class UserRecord {
 	private int    index;
 	private WritePolicy writePolicy = new WritePolicy();
 	private Policy policy = new Policy();
-	
+
 	/**
-	 * Generate a customer record based on the seed value.
+	 * Generate a customer record based on the seed value.  This is used by
+	 * the data generator.
 	 * @param console
 	 * @param seed
 	 */
 	public UserRecord(Console console, String custID, int seed) {
-		
+
 		this.userID = String.format("UserName(%d)", seed);
 		this.email = String.format("Email(%d)", seed);
 		this.phone = String.format("Phone(%08d)", seed);
@@ -56,11 +54,11 @@ public class UserRecord {
 		this.customerID = custID;
 		this.index = seed; 
 		this.console = console;
-		
+
 		console.debug("Creating User Record(%d): CustID(%s) UserID(%s)",
 				seed, custID, userID);
 	}
-	
+
 	/**
 	 * Generate a customer record based on the JSON User Object.
 	 * @param console
@@ -70,7 +68,7 @@ public class UserRecord {
 
 		// JSON for User Record is Set Name, followed by User Object
 		String custID = (String) cmdObj.get("set_name");
-		
+
 		JSONObject userObj = (JSONObject) cmdObj.get("user");
 		String nameStr = (String) userObj.get("name");
 		String emailStr = (String) userObj.get("email");
@@ -78,7 +76,7 @@ public class UserRecord {
 		String addressStr = (String) userObj.get("address");
 		String companyStr = (String) userObj.get("company");
 
-		
+
 		this.userID = nameStr;
 		this.email = emailStr;
 		this.phone = phoneStr;
@@ -87,11 +85,11 @@ public class UserRecord {
 		this.customerID = custID;
 		this.index = seed; 
 		this.console = console;
-		
+
 		console.debug("Creating User Record(2): CustID(%s) UserID(%s)",
 				custID, userID);
 	}
-	
+
 	/**
 	 * Generate a customer record based on real values.
 	 * @param console
@@ -105,7 +103,7 @@ public class UserRecord {
 	{
 		console.debug("Creating User Record(3): CustID(%s) UserID(%s)",
 				custID, userID);
-		
+
 		this.console = console;		
 		this.userID = userID;
 		this.email = email;
@@ -123,11 +121,11 @@ public class UserRecord {
 	public int toStorage(AerospikeClient client, String namespace) throws Exception {
 		console.debug("Enter toStorage(): NS(%s)", namespace);
 		int result = 0;
-		
+
 		// Set is the Customer ID, Record Key is the userID.
 		String setName = this.customerID;
 		String recordKey = this.userID;
-		
+
 		try {
 
 			// Note that custID is BOTH the name of the Aerospike SET and it
@@ -146,7 +144,7 @@ public class UserRecord {
 
 			console.debug("Put: Email(%s) phone(%s) addr(%s) company(%s) index(%s)",
 					emailBin.value, phoneBin.value, addressBin.value, companyBin.value, indexBin.value);
-			
+
 			// Write the Record
 			client.put(this.writePolicy, key, nameBin, emailBin, phoneBin,
 					addressBin, companyBin, indexBin );
@@ -157,7 +155,7 @@ public class UserRecord {
 		}
 
 		return result;
-	}
+	} // end toStorage()
 
 	/**
 	 * Given a User object, read it from the set (using the key custID) and
@@ -176,7 +174,7 @@ public class UserRecord {
 		// Set is the Customer ID, Record Key is the userID.
 		String setName = this.customerID;
 		String recordKey = this.userID;
-		
+
 		try {
 
 			// Get the User Record for a given UserId and CustID
@@ -191,17 +189,57 @@ public class UserRecord {
 						"Failed to get: namespace=%s set=%s key=%s",
 						key.namespace, key.setName, key.userKey));
 			}
-			
+
 			console.debug("Record Result:" + record );
-			
+
 		} catch (Exception e){
 			e.printStackTrace();
 			console.warn("Exception: " + e);
 		}
-		
+
 		return record;
 	} // end fromStorage()
-	
+
+
+
+	/**
+	 * Given a User object, remove it from the set (using the key custID).
+	 * 
+	 * @param client
+	 * @param nameSpace
+	 * @return
+	 * @throws Exception
+	 */
+	public Record  remove(AerospikeClient client, String namespace) 
+			throws Exception 
+	{
+		Record record = null;
+
+		// A slightly strange case where the customerID is BOTH the set name
+		// and the Key for the customer record.
+		String setName = this.customerID;
+		String recordKey = this.userID;
+
+		try {
+			Key key        = new Key(namespace, setName, recordKey);
+
+			// Remove the record
+			console.debug("Remove Record: namespace(%s) set(%s) key(%s)",
+					key.namespace, key.setName, key.userKey);
+			client.delete(this.writePolicy, key);
+
+		} catch (Exception e){
+			e.printStackTrace();
+			console.warn("Exception: " + e);
+		}
+
+		return record;
+	} // end remove()
+
+
+	/**
+	 * 	Make our user record more readable.
+	 */
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format("UserID(%s)", userID));
@@ -211,7 +249,7 @@ public class UserRecord {
 		sb.append(String.format("Company(%s)", company));
 		sb.append(String.format("CustomerID(%s)", customerID));
 		sb.append(String.format("Index(%d)",  index));
-		
+
 		return sb.toString();
 	}
 
@@ -270,6 +308,6 @@ public class UserRecord {
 	public void setIndex(int index) {
 		this.index = index;
 	}
-	
-	
-}
+
+
+} // end UserRecord class.
