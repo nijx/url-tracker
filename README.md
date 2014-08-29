@@ -2,15 +2,15 @@
 
 ## Overview (3)
 
-This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit"
-values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.
+This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit" values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.
 
 ## Introduction
 
 In the Aerospike Database, customer data is kept in a set.   There are many
 sets -- one for each customer.  In each customer set, there are user records.
 Each user record describes a user.
-In each user record, besides the user data, there is a collection of site-visit information that pertains to a user.
+In each user record, besides the user data, there is a collection of site-visit information that
+pertains to a user.
 The site-visit data collection is managed by an Aerospike Large Data Type (LDT).
 
 The overall data schema is as follows:
@@ -91,7 +91,8 @@ is in:  `https://github.com/aerospike/url-tracker`
 
 ##Installing and Running This Application
 
-This is a Java application that uses Aerospike Java Client (version 3.0.27 or later), eclipse and Maven.  The `pom.xml` file shows Maven how to build the package.
+This is a Java application that uses Aerospike Java Client (version 3.0.27 or later), eclipse and Maven.
+The `pom.xml` file shows Maven how to build the package.
 Maven can easily be obtained from: `http://maven.apache.org/`
 
 One set of steps for obtaining, building and running this application would be the following:
@@ -103,9 +104,16 @@ One set of steps for obtaining, building and running this application would be t
 
 ##The Example Application Invocation
 
-The application is a Java application, built as a Maven Project.  It can be run inside eclipse (a common choice while developing) or as a stand-alone program using the generated jar file.  The main class is **UrlTracker** and the main function is `main()`.
+The application is a Java application, built as a Maven Project.  It can be run
+inside eclipse (a common choice while developing) or as a stand-alone program using
+the generated jar file.  The main class is **UrlTracker** and the main function is `main()`.
 
 In the eclipse tree -- the generated jar file is: `url-tracker-new-1.0.0-full.jar`
+Also included in the package is the `runapp` file, which shows how to run the jar file directly:
+
+```
+java -cp target/url-tracker-new-1.0.0-full.jar com.aerospike.examples.ldt.UrlTracker
+```
 
 The application can be started with the following options:
 
@@ -116,12 +124,29 @@ The application can be started with the following options:
 * -u              Print usage options
 * -f  "filename", Input FileName (default: commands.json)
 * -t "LDT type"   LDT Name for Site-Visit Collection (default: LLIST)
-* -g              Generate Data (overrides "-f" option])
+* -g "OpCount"     Generate Data (overrides "-f" option])
+* -c "Cust Count" Number of customer sets and records to generate
+* -r "Rec Count" Number of User Records per customer set to generate
+* -C "flag"       When flag==1, Clean up all previous records before the test run (default: 1)
+* -R "flag "      When flag==1, Remove all records after the test run (default: 1)
 
-By default, the application will expect to connect to an Aerospike Server running locally (localhost), at port 3000, using namespace "test" and set "demo", reading data from a local file called "commands.json" and using Large Ordered List (LLIST) to manage the site-visit collection.
+By default, the application will expect to connect to an Aerospike Server running
+locally (localhost), at port 3000, using namespace "test" and set "demo", reading
+data from a local file called "commands.json" and using Large Ordered List (LLIST)
+to manage the site-visit collection.
 
-##Application Data
-When the application is data driven (data read from the input file), the data file has the following format:
+#Program Modes
+
+There are two modes in which the application can: "Generate Mode" and "JSON Data Mode".
+"JSON Data Mode" uses a JSON file to feed commands to the URL-Tracker interpreter.
+The commands create records, query records and delete records (explained below).
+"Generate Mode" creates Customer Records, User Records and Site-Visit records according
+to a pattern that is specified by the input parameters.
+The "JSON Data Mode" is the default mode, and if no 
+
+##JSON Data Mode
+When the application is data driven (data read from the input file), the data file
+has the following format:
 
 ```
 {

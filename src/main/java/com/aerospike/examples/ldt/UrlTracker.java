@@ -232,13 +232,15 @@ public class UrlTracker {
 			options.addOption("n", "namespace", true, "Namespace (default: test)");
 			options.addOption("s", "set", true, "Set (default: demo)");
 			options.addOption("u", "usage", false, "Print usage.");
+			options.addOption("d", "debug", false, "Turn on DEBUG level prints.");
 			options.addOption("f", "filename", true, "Input File (default: commands.json)");
 			options.addOption("t", "type", true, "LDT Type (default: LLIST)");
 			options.addOption("g", "generate", true, "Generate input data, with N update iterations (default: 0)");
-			options.addOption("c", "customer", true, "Number of customer records (default: 10)");
-			options.addOption("r", "records", true, "Ave number of users per customer (default: 20)");
-			options.addOption("v", "visits", true, "Ave number of visits per user (default: 500)");
-			
+			options.addOption("c", "customer", true, "Generated Number of customer sets (default: 10)");
+			options.addOption("r", "records", true, "Generated number of users per customer (default: 20)");
+			options.addOption("v", "visits", true, "Generated number of visits per user (default: 500)");
+			options.addOption("T", "THREADS", true, "Number of threads to use in Generate Mode (default: 1)");
+					
 			options.addOption("C", "CLEAN", true, "CLEAN all records at start of run (default 1)");
 			options.addOption("R", "REMOVE", true, "REMOVE all records at END of run (default 1)");
 
@@ -259,18 +261,22 @@ public class UrlTracker {
 			String recordString = cl.getOptionValue("r", "20");
 			int records = Integer.parseInt(recordString);
 			
+			// Note: Visit Count not currently used.  It is effectively folded
+			// into the overall GenerateCount value.
 			String visitString = cl.getOptionValue("v", "500");
 			int visits = Integer.parseInt(visitString);
 		
 			String generateString = cl.getOptionValue("g", "0");
-			int generateCount = Integer.parseInt(generateString);
+			int generateCount = Integer.parseInt(generateString);	
+			
+			String threadString = cl.getOptionValue("T", "1");
+			int threadCount  = Integer.parseInt(threadString);
 			
 			String cleanString = cl.getOptionValue("C", "1");
 			boolean clean  = Integer.parseInt(cleanString) == 1;
 			
 			String removeString = cl.getOptionValue("R", "1");
 			boolean remove  = Integer.parseInt(removeString) == 1;
-
 
 			console.info("Host: " + host);
 			console.info("Port: " + port);
@@ -282,6 +288,7 @@ public class UrlTracker {
 			console.info("User Records: " + records);
 			console.info("User Site Visit Records: " + visits);
 			console.info("Generate: " + generateCount );
+			console.info("Threads: " + threadCount );
 			console.info("Clean Before: " + clean );
 			console.info("Remove After: " + remove);
 
@@ -290,6 +297,10 @@ public class UrlTracker {
 			if (cmds.size() == 0 && cl.hasOption("u")) {
 				logUsage(options);
 				return;
+			}
+			
+			if (cmds.size() == 0 && cl.hasOption("d")) {
+				console.setDebug();
 			}
 			
 			// Validate the LDT implementation that we're going to use
@@ -438,6 +449,10 @@ public class UrlTracker {
 			// expect that it will be unique.   If we do get a collision (esp
 			// when we start using multiple threads to drive it), we'll just
 			// retry (which will give us a different nano-time number).
+			//
+			// Also -- we will invoke multiple instances of the client, each
+			// in a thread,  to increase the traffic to the DB cluster (and thus
+			// giving it more exercise).
 			Random random = new Random();
 			int customerSeed = 0;
 			int userSeed = 0;
