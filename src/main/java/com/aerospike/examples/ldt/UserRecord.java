@@ -55,7 +55,7 @@ public class UserRecord {
 		this.index = seed; 
 		this.console = console;
 
-		console.debug("Creating User Record(%d): CustID(%s) UserID(%s)",
+		console.debug("Creating Generated User Record(%d): CustID(%s) UserID(%s)",
 				seed, custID, userID);
 	}
 
@@ -86,7 +86,7 @@ public class UserRecord {
 		this.index = seed; 
 		this.console = console;
 
-		console.debug("Creating User Record(2): CustID(%s) UserID(%s)",
+		console.debug("Creating JSON User Record(2): CustID(%s) UserID(%s)",
 				custID, userID);
 	}
 
@@ -101,7 +101,7 @@ public class UserRecord {
 	public UserRecord(Console console, String custID, String userID, String email, 
 			String phone, String address, String company, int seed )
 	{
-		console.debug("Creating User Record(3): CustID(%s) UserID(%s)",
+		console.debug("Creating Explicit User Record(3): CustID(%s) UserID(%s)",
 				custID, userID);
 
 		this.console = console;		

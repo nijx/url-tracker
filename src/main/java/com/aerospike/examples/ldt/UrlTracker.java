@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.*;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -291,6 +292,7 @@ public class UrlTracker {
 			console.info("Threads: " + threadCount );
 			console.info("Clean Before: " + clean );
 			console.info("Remove After: " + remove);
+			console.info("Thread Count: " + threadCount );
 
 			@SuppressWarnings("unchecked")
 			List<String> cmds = cl.getArgList();
@@ -313,13 +315,14 @@ public class UrlTracker {
 			}
 
 			UrlTracker tracker = 
-				new UrlTracker(host, port, namespace, set, fileName, ldtType, console );
+				new UrlTracker(host, port, namespace, set, fileName, ldtType, 
+						console );
 			if (generateCount > 0){
 				if ( clean ) {
 					tracker.cleanDB(customers, records);
 				}
 				tracker.generateCommands( ldtType, generateCount, customers,
-						records, visits );
+						records, visits, threadCount );
 				if ( remove ) {
 					tracker.cleanDB(customers, records);
 				}
@@ -344,21 +347,10 @@ public class UrlTracker {
 	}
 	
 	/**
-	 * generateCommands():  Rather than READ the commands from a file, we 
-	 * instead GENERATE the commands and then act on them.  We use a random
-	 * distribution of operations
-	 * 
-	 * (*) NewUser <data>: Add a new User Record to Set N
-	 * (*) NewEntry <data>: Add a new Site Visit entry to User Record in Set N
-	 * (*) QueryUser <data>: Fetch all of the Site Data for a User in Set N
-	 * (*) RemoveExpired: Remove all Site entries that have expired
-	 * 
-	 * as well as the minor commands:
-	 * (-) ScanSet: Show all records in the customer set
-	 * (-) RemoveRecord: Remove a record, by key
-	 * (-) RemoveAllRecords: Remove all records in a customer set
-	 * 
-	 * @throws Exception
+	 * cleanDB():  
+	 * For the assumed number of customer records and user records, remove them
+	 * all from the database.  This function is generally used BEFORE and AFTER
+	 * a test run -- to start with a clean DB and end with a clean DB.
 	 */
 	public void cleanDB( int customers, int userRecords )  {
 		
@@ -390,7 +382,10 @@ public class UrlTracker {
 	
 	/**
 	 * generateCommands():  Rather than READ the commands from a file, we 
-	 * instead GENERATE the commands and then act on them.  We use a random
+	 * instead GENERATE the commands and then act on them.  We first create
+	 * the specified number of Customer Records (and the AS Set for each one),
+	 * then we create the specified number of User Records for each Customer.
+	 * Then, finally, we use a pseudo-ra the We use a random
 	 * distribution of operations
 	 * 
 	 * (*) NewUser <data>: Add a new User Record to Set N
@@ -406,7 +401,7 @@ public class UrlTracker {
 	 * @throws Exception
 	 */
 	public void generateCommands( String ldtType, int generateCount,
-			int customers, int userRecords, int visitEntries ) 
+			int customers, int userRecords, int visitEntries, int threadCount ) 
 	{
 		
 		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) Visits(%d)", 
@@ -441,62 +436,91 @@ public class UrlTracker {
 					userRec.toStorage(client, namespace);
 				} // end for each user record	
 			} // end for each customer
-			
-			// Start a steady-State insertion and expiration cycle.
-			// For "Generation Count" iterations, generate a pseudo-random
-			// pattern for a Customer/User record and then insert a site visit
-			// record.  Since we're using TIME (nano-seconds) for the key, we
-			// expect that it will be unique.   If we do get a collision (esp
-			// when we start using multiple threads to drive it), we'll just
-			// retry (which will give us a different nano-time number).
-			//
-			// Also -- we will invoke multiple instances of the client, each
-			// in a thread,  to increase the traffic to the DB cluster (and thus
-			// giving it more exercise).
-			Random random = new Random();
-			int customerSeed = 0;
-			int userSeed = 0;
-			String ns = namespace;
-			String set = null;
-			String key = null;
-			Long expire = 0L;
-			console.info("Done with Load.  Starting Site Visit Generation.");
-			for (i = 0; i < generateCount; i++) {
-				customerSeed = random.nextInt(customers);
-				custRec = new CustomerRecord(console, customerSeed);
-				
-				userSeed = random.nextInt(userRecords);
-				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
-				
-				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
-						userRec.getUserID(), i);
-				sve.toStorage(client, namespace, ldtOps);
-				
-				set = custRec.getCustomerID();
-				key = userRec.getUserID();
-				
-				// At predetermined milestones, perform various actions 
-				if( i % 10000 == 0 ) {
-					console.info("Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-							customerSeed, set, userSeed, key, i);
-				}
-				if( i % 20000 == 0 ) {
-					console.info("QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-							customerSeed, set, userSeed, key, i);
-					dbOps.printSiteVisitContents(set, key);
-				}
-				if( i % 30000 == 0 ) {
-					console.info("CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-							customerSeed, set, userSeed, key, i);
-					expire = System.nanoTime();
-					processRemoveExpired( ns, set, key, expire );
-				}			
-			} // end for each generateCount
-			
 		} catch (Exception e) {
 			e.printStackTrace();
 			console.error("Problem with Customer Record: Seed(%d)", i);
 		}
+		
+		// Start "threadCount" number of threads that will 
+		int threadIterations = generateCount / threadCount;
+		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+		console.info("Starting (" + threadCount + ") Threads" );
+		for ( int t = 0; t < threadCount; t++ ) {
+			console.info("Starting Thread: " + t );
+			Runnable userTrafficThread = new UserTraffic(console, client, dbOps,
+					namespace, threadIterations, customers, userRecords, t );
+			executor.execute( userTrafficThread );
+		}
+		
+		executor.shutdown();
+		// Wait until all threads finish.
+		while ( !executor.isTerminated() ) {
+			// Do nothing
+		}
+		
+		console.info("Finished All Threads");
+		
+//		
+//		try {
+//			
+//			// Start a steady-State insertion and expiration cycle.
+//			// For "Generation Count" iterations, generate a pseudo-random
+//			// pattern for a Customer/User record and then insert a site visit
+//			// record.  Since we're using TIME (nano-seconds) for the key, we
+//			// expect that it will be unique.   If we do get a collision (esp
+//			// when we start using multiple threads to drive it), we'll just
+//			// retry (which will give us a different nano-time number).
+//			//
+//			// Also -- we will invoke multiple instances of the client, each
+//			// in a thread,  to increase the traffic to the DB cluster (and thus
+//			// giving it more exercise).
+//			//
+//			// New addition:  If our user has specified more than one thread,
+//			// then we'll fire off multiple threads
+//			Random random = new Random();
+//			int customerSeed = 0;
+//			int userSeed = 0;
+//			String ns = namespace;
+//			String set = null;
+//			String key = null;
+//			Long expire = 0L;
+//			console.info("Done with Load.  Starting Site Visit Generation.");
+//			for (i = 0; i < generateCount; i++) {
+//				customerSeed = random.nextInt(customers);
+//				custRec = new CustomerRecord(console, customerSeed);
+//				
+//				userSeed = random.nextInt(userRecords);
+//				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
+//				
+//				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
+//						userRec.getUserID(), i);
+//				sve.toStorage(client, namespace, ldtOps);
+//				
+//				set = custRec.getCustomerID();
+//				key = userRec.getUserID();
+//				
+//				// At predetermined milestones, perform various actions 
+//				if( i % 10000 == 0 ) {
+//					console.info("Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+//							customerSeed, set, userSeed, key, i);
+//				}
+//				if( i % 20000 == 0 ) {
+//					console.info("QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+//							customerSeed, set, userSeed, key, i);
+//					dbOps.printSiteVisitContents(set, key);
+//				}
+//				if( i % 30000 == 0 ) {
+//					console.info("CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+//							customerSeed, set, userSeed, key, i);
+//					expire = System.nanoTime();
+//					processRemoveExpired( ns, set, key, expire );
+//				}			
+////			} // end for each generateCount
+//			
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//			console.error("Problem with Customer Record: Seed(%d)", i);
+//		}
 
 		console.info("ProcessCommands: Done with GENERATED COMMANDS");
 	} // end generateCommands()
