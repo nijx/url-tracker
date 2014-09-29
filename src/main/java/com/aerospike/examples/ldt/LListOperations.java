@@ -1,6 +1,5 @@
 package com.aerospike.examples.ldt;
 
-//import java.io.Console;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,7 +104,7 @@ public class LListOperations implements ILdtOperations {
 
 		} catch (Exception e){
 			e.printStackTrace();
-			System.out.println("Exception: " + e);
+			System.out.println("Store Site Visit Exception: " + e);
 		}
 	} // end storeSiteObject()
 
@@ -126,7 +125,7 @@ public class LListOperations implements ILdtOperations {
 			sve.toStorage(client, ns, this);		
 		} catch (Exception e){
 			e.printStackTrace();
-			System.out.println("Exception: " + e);
+			System.out.println("Process New Site Visit Exception: " + e);
 		}
 	} // end processNewSiteVisit()
 
@@ -137,10 +136,11 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
+	@SuppressWarnings("unchecked")
 	public List<Map<String,Object>> 
 	processSiteQuery( String ns, String set, String key ) 
 	{
-		System.out.println("ENTER ProcessSiteQuery");
+		console.debug("ENTER ProcessSiteQuery");
 		
 		List<Map<String,Object>> scanList = null;
 
@@ -162,9 +162,9 @@ public class LListOperations implements ILdtOperations {
 
 		} catch (Exception e){
 			e.printStackTrace();
-			console.warn("Exception: " + e);
+			console.warn("Process Site Query Exception: " + e);
 		}
-		console.info("Done with Site Query");
+		console.debug("Done with Site Query");
 		
 		return scanList;
 	} // end processSiteQuery()
@@ -179,57 +179,64 @@ public class LListOperations implements ILdtOperations {
 	 * @param commandObj
 	 * @param params
 	 */
-	public void processRemoveExpired( String ns, String set, String key, long expire ) {
-		System.out.println("ENTER ProcessRemoveExpired");
+	public void processRemoveExpired( String ns, String set, Key key, long expire ) {
+		console.debug("ENTER ProcessRemoveExpired");
 		List<Map<String,Object>> scanList = null;
 
 		try {
-			Key userKey = new Key(ns, set, key);
 			String siteListBin = "Site List";
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, userKey, siteListBin, null);
+					client.getLargeList(this.policy, key, siteListBin, null);
 
 			// Perform a Range Query -- from "MIN" to "EXPIRE"
 			Value minValue = new Value.NullValue();
 			Value maxValue = Value.get(expire);
 
-			List<Map<String,Object>> rangeList =  
-					(List<Map<String,Object>>) llist.range( minValue, maxValue );
+			try {
+				List<Map<String,Object>> rangeList =  
+						(List<Map<String,Object>>) llist.range( minValue, maxValue );
 
-			// Process all items that are returned from the range query
-			for (Map<String,Object> mapItem : rangeList) {
-				System.out.println("Map Item" + mapItem );
-			}
-
-			// For each item in the range query, remove that item from the 
-			// Large List.
-			for (Map<String,Object> mapItem : rangeList) {
-				System.out.println("Removing Map Item(" + mapItem + ") From the LLIST." );
-				llist.remove(Value.getAsMap(mapItem));
-			}	
-			
-//			if( console.debugIsOn() ) {
-			if ( true ) {
-				System.out.println("Checking Results after a REMOVE EXPIRE::" + expire);
-				// Validate Results with a Scan:
-				scanList = (List<Map<String,Object>>) llist.scan();
-				if (scanList.size() > 0 ) {
-					console.debug("Showing Remaining Items after Expire.");
-					for (Map<String,Object> mapItem : scanList) {
-						System.out.println("Map Item:: " + mapItem );
-					}
-				} else {
-					System.out.println("NO Objects from Scan: Nothing left after Expire.");
+				// Process all items that are returned from the range query
+				for (Map<String,Object> mapItem : rangeList) {
+					console.debug("Map Item" + mapItem );
 				}
+
+				// For each item in the range query, remove that item from the 
+				// Large List.
+				for (Map<String,Object> mapItem : rangeList) {
+					//				System.out.println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR");
+					console.debug("Removing Map Item(" + mapItem + ") From the LLIST." );
+					//				System.out.println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR");
+					llist.remove(Value.getAsMap(mapItem));
+				}
+			} catch (AerospikeException ae) {
+				// Ignore Aerospike Exception
+				
 			}
+			
+			// Remove this for the moment -- reactivate when we're checking
+			// Post Expiration state.
+//			if( console.debugIsOn() ) {
+//				System.out.println("Checking Results after a REMOVE EXPIRE::" + expire);
+//				// Validate Results with a Scan:
+//				scanList = (List<Map<String,Object>>) llist.scan();
+//				if (scanList.size() > 0 ) {
+//					console.debug("Showing Remaining Items after Expire.");
+//					for (Map<String,Object> mapItem : scanList) {
+//						System.out.println("Map Item:: " + mapItem );
+//					}
+//				} else {
+//					System.out.println("NO Objects from Scan: Nothing left after Expire.");
+//				}
+//			}
 
 		} catch (Exception e){
 			e.printStackTrace();
-			System.out.println("Exception: " + e);
+			System.out.println("Process Remove Expired Exception: " + e);
 		}
-		console.info("Done with Remove Expired");
+		console.debug("Done with Remove Expired");
 	} // processRemoveExpired()
 
 } // end class LListOperations

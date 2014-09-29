@@ -2,6 +2,8 @@ package com.aerospike.examples.ldt;
 
 import java.util.List;
 import java.util.Map;
+
+import com.aerospike.client.Key;
 //import java.io.Console;
 
 /**
@@ -48,8 +50,7 @@ public interface ILdtOperations {
 	 * @param key
 	 * @param expire
 	 */
-	public abstract void processRemoveExpired( String ns, String set, String key,
+	public abstract void processRemoveExpired( String ns, String set, Key key,
 			long expire);
-
 
 } // end interface ILdtOperations

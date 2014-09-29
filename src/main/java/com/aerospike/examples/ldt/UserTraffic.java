@@ -16,17 +16,26 @@
  */
 package com.aerospike.examples.ldt;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.ScanCallback;
-import com.aerospike.client.policy.ScanPolicy;
 
 /**
+ * This class represents a thread of execution that performs operations on the
+ * User-Site Data.  Once the Customer Set and the User Records have been set
+ * up (as specified by the user's input parameters), one or more of these
+ * threads will generate Site-Visit data (that simulates visits to URLs)
+ * and inserts those entries into a Site-Visit collection (implemented by
+ * an LDT) that is held in a User Record.
+ * 
+ * Along with the Site-Visit data generation, we periodically perform
+ * administrative operations, such as the cleaning of expired data.
+ * In some cases, we do "spot cleaning" (specify a particular record), and
+ * in other cases we do a scan of all User Records of an entire Customer Set
+ * and scrub (i.e. clean) each LDT collection and remove any entries that are
+ * older than a given value.
+ * 
  * @author toby
  *
  */
@@ -67,7 +76,7 @@ public class UserTraffic implements Runnable {
 		int userSeed = 0;
 		String ns = namespace;
 		String set = null;
-		String key = null;
+		String keyStr = null;
 		Long expire = 0L;
 		int i = 0;
 		int generateCount = this.iterations;
@@ -107,24 +116,26 @@ public class UserTraffic implements Runnable {
 				sve.toStorage(client, namespace, ldtOps);
 				
 				set = custRec.getCustomerID();
-				key = userRec.getUserID();
+				keyStr = userRec.getUserID();
+				
+				Key key = new Key(ns, set, keyStr);	
 				
 				// At predetermined milestones, perform various actions 
 				if( i % 100 == 0 ) {
 					console.info("ThreadNum(%d) Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-							threadNumber, customerSeed, set, userSeed, key, i);
+							threadNumber, customerSeed, set, userSeed, keyStr, i);
 				}
 				if( i % 200 == 0 ) {
 					console.info("ThreadNum(%d) QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-							threadNumber, customerSeed, set, userSeed, key, i);
-					dbOps.printSiteVisitContents(set, key);
+							threadNumber, customerSeed, set, userSeed, keyStr, i);
+					dbOps.printSiteVisitContents(set, keyStr);
 				}
-				if( i % 300 == 0 ) {
-					console.info("ThreadNum(%d) CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-							threadNumber, customerSeed, set, userSeed, key, i);
-					expire = System.nanoTime();
-					ldtOps.processRemoveExpired( ns, set, key, expire );
-				}			
+//				if( i % 300 == 0 ) {
+//					console.info("ThreadNum(%d) CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+//							threadNumber, customerSeed, set, userSeed, keyStr, i);
+//					expire = System.nanoTime();
+//					ldtOps.processRemoveExpired( ns, set, key, expire );
+//				}			
 			} // end for each generateCount
 			
 		} catch (Exception e) {

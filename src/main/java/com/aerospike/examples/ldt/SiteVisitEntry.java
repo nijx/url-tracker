@@ -16,22 +16,18 @@
  */
 package com.aerospike.examples.ldt;
 
-import java.sql.Date;
 import java.util.Map;
 
 import org.json.simple.JSONObject;
 
 import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.Value;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
 
 public class SiteVisitEntry {
 	
-	// Set TIME TO LIVE as 300 seconds (five minutes in nano-seconds).
-	public static final long TIME_TO_LIVE = 300000000000L;
+	// Set TIME TO LIVE as 30 seconds (in nano-seconds).
+	public static final long TIME_TO_LIVE = 30000000000L;
 
 	private Console console;
 	private String custID; // The Set Name
@@ -104,10 +100,7 @@ public class SiteVisitEntry {
 		this.referrer = referrerStr;
 		this.pageTitle = pageTitleStr;
 		
-		// Get the current Time.  Use this rather than the passed in time.
-//		Date javaDate = new Date(0);
-//		this.date = javaDate.getTime();
-//		this.expire = this.date + TIME_TO_LIVE;
+		// Set the current Time and Expire values.
 		this.date = dateLong;
 		this.expire = expireLong;
 		

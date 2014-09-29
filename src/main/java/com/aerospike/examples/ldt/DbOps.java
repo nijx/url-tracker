@@ -125,10 +125,12 @@ public class DbOps {
 		scanList = ldtOps.processSiteQuery(this.namespace, set, key);
 		
 		// Show the results of the site query
+
 		System.out.printf("Site Visit Entries: Set(%s) UserId(%s)\n", set, key );
+
 		int counter = 1;
 		for ( Map<String,Object> mapObject : scanList ) {
-			System.out.println("(" + counter++ + ") Obj(" + mapObject + ")" );
+			console.debug("(" + counter++ + ") Obj(" + mapObject + ")" );
 		}
 		
 		System.out.println("Site Query Results: " + (counter - 1) + " Objects.");
@@ -143,9 +145,9 @@ public class DbOps {
 	 * @param commandObj
 	 */
 	public void removeSetRecords( String set  ) {
-		console.debug("ENTER processRemoveAllRecords");
+		console.debug("ENTER removeSetRecords");
 
-		List<Key> keyList;
+		List<Key> keyList; // The list of record keys in this set.
 
 		try {
 			ScanKeySet scanKeySet = new ScanKeySet( console );
@@ -153,16 +155,52 @@ public class DbOps {
 			
 			// Process all records (via keys) in the scanSet.
 			for (Key key : keyList) {
-				System.out.println("Key:: " + key );
+				console.debug("Key:: " + key );
 				client.delete(writePolicy, key);
 			}
 			
 		} catch (Exception e){
 			e.printStackTrace();
-			console.warn("Exception: " + e);
+			console.warn("Scan Delete Exception: " + e);
 		}
 		console.debug("Done with Query");
-	} // end processRemoveSetRecords()
+	} // end removeSetRecords()
+	
+	// -----------
+	
+	/**
+	 * Clean all records for a given set;  Remove all of the expired data
+	 * from the LDT bins in every record of the set.
+	 * 
+	 * Do a scan, and then for each record in the scan set, perform an LDT
+	 * clean operation.
+	 * 
+	 * @param commandObj
+	 */
+	public void cleanLdtObjectsInSet( String set, ILdtOperations ldtOp  ) {
+		console.debug("ENTER cleanLdtObjectsInSet");
+
+		List<Key> keyList; // The list of record keys in this set.
+
+		try {
+			ScanKeySet scanKeySet = new ScanKeySet( console );
+			keyList = scanKeySet.runScan(client, this.namespace, set);
+			
+			// Process all records (via keys) in the scanSet.
+			for (Key key : keyList) {
+				console.debug("Key:: " + key );
+				client.delete(writePolicy, key);
+			}
+			
+		} catch (Exception e){
+			e.printStackTrace();
+			console.warn("Scan LDT Delete Exception: " + e);
+		}
+		console.debug("Done with Query");
+	} // end cleanLdtObjectsInSet()
+	
+	
+	// ..........
 	
 	/**
 	 * Remove a specific record, given a set and a keyString.

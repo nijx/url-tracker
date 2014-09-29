@@ -7,9 +7,8 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -84,8 +83,15 @@ There are several additional (supportive) operations:
 (*) Remove a record (by key)
 (*) Remove all records in a customer set
 
-Invocation Examples:
-(*) -h 172.16.114.164 -g 50000 -c 10 -r 100 -v 500
+Invocation Parameter Examples:
+(*) Invoke this program with "Auto-generate" ...
+    ==>      -h 172.16.114.164 -g 50000 -c 10 -r 100
+    And, we will create:
+     + 10 customer sets
+     + 100 User Records in each set
+     + 50000 generated Site-Visit operations across the 10 sets and 100 records
+       in each set.
+
 
 @author toby
 */
@@ -102,6 +108,8 @@ public class UrlTracker {
 	private WritePolicy writePolicy;
 	private Policy policy;
 	private int generateCount;
+	private int cleanInterval; // Sleep time between LDT Clean expiration cycles
+	private long cleanDuration; // Total amount of time to run the clean threads
 
 	protected Console console;
 
@@ -115,7 +123,8 @@ public class UrlTracker {
 	 * @throws AerospikeException
 	 */
 	public UrlTracker(String host, int port, String namespace, String set, 
-			String fileName, String ldtType, Console console) 
+			String fileName, String ldtType, Console console, int cleanInterval,
+			long cleanDuration) 
 					throws AerospikeException 
 	{
 		
@@ -136,6 +145,8 @@ public class UrlTracker {
 		this.writePolicy.maxRetries = 0;
 		this.policy = new Policy();
 		this.console = console;
+		this.cleanInterval = cleanInterval;
+		this.cleanDuration = cleanDuration;
 	}
 	
 	/**
@@ -212,14 +223,21 @@ public class UrlTracker {
 	 * @param commandObj
 	 * @param params
 	 */
-	private void processRemoveExpired(String ns, String set, String key,
-			long expire) {
+	private void processRemoveExpired(String ns, String set, String keyStr,
+			long expire) 
+	{
 		console.debug("ENTER ProcessRemoveExpired");
-		
+
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
 		// (*) LMAP, with the unique value on "expire" value.	
-		dbOps.getLdtOps().processRemoveExpired(ns, set, key, expire);
+		try {
+			Key key = new Key(ns, set, keyStr);
+			dbOps.getLdtOps().processRemoveExpired(ns, set, key, expire);
+		} catch (Exception e) {
+			e.printStackTrace();
+			console.warn("Exception: " + e);
+		}
 	} // processRemoveExpired()
 
 	public static void main(String[] args) throws AerospikeException {
@@ -241,6 +259,8 @@ public class UrlTracker {
 			options.addOption("r", "records", true, "Generated number of users per customer (default: 20)");
 			options.addOption("v", "visits", true, "Generated number of visits per user (default: 500)");
 			options.addOption("T", "THREADS", true, "Number of threads to use in Generate Mode (default: 1)");
+			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 10 sec)");
+			options.addOption("D", "CleanDuration", true, "Total seconds to run clean threads (default: 600 sec)");
 					
 			options.addOption("C", "CLEAN", true, "CLEAN all records at start of run (default 1)");
 			options.addOption("R", "REMOVE", true, "REMOVE all records at END of run (default 1)");
@@ -278,6 +298,15 @@ public class UrlTracker {
 			
 			String removeString = cl.getOptionValue("R", "1");
 			boolean remove  = Integer.parseInt(removeString) == 1;
+			
+			// Amount to sleep (in seconds) between LDT data cleaning runs
+			String intervalString = cl.getOptionValue("I", "10");
+			int intervalSeconds = Integer.parseInt(intervalString);
+			
+			// Total Duration (in seconds) of the time that we'll let the
+			// Cleaning Threads run.
+			String durationString = cl.getOptionValue("D", "600");
+			long durationSeconds = Long.parseLong(durationString);
 
 			console.info("Host: " + host);
 			console.info("Port: " + port);
@@ -293,6 +322,8 @@ public class UrlTracker {
 			console.info("Clean Before: " + clean );
 			console.info("Remove After: " + remove);
 			console.info("Thread Count: " + threadCount );
+			console.info("Clean Interval: " + intervalSeconds );
+			console.info("Clean Duration: " + durationSeconds );
 
 			@SuppressWarnings("unchecked")
 			List<String> cmds = cl.getArgList();
@@ -316,13 +347,14 @@ public class UrlTracker {
 
 			UrlTracker tracker = 
 				new UrlTracker(host, port, namespace, set, fileName, ldtType, 
-						console );
+						console, intervalSeconds, durationSeconds );
 			if (generateCount > 0){
 				if ( clean ) {
 					tracker.cleanDB(customers, records);
 				}
 				tracker.generateCommands( ldtType, generateCount, customers,
-						records, visits, threadCount );
+						records, visits, threadCount, intervalSeconds,
+						durationSeconds);
 				if ( remove ) {
 					tracker.cleanDB(customers, records);
 				}
@@ -401,7 +433,8 @@ public class UrlTracker {
 	 * @throws Exception
 	 */
 	public void generateCommands( String ldtType, int generateCount,
-			int customers, int userRecords, int visitEntries, int threadCount ) 
+			int customers, int userRecords, int visitEntries, int threadCount,
+			int cleanInterval, long cleanDuration) 
 	{
 		
 		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) Visits(%d)", 
@@ -452,6 +485,16 @@ public class UrlTracker {
 			executor.execute( userTrafficThread );
 		}
 		
+		// Now start up the LDT Cleaning Threads that will scour each
+		// Customer Set periodically and remove expired LDT items
+		console.info("Starting (" + customers + ") Cleaning Threads" );
+		for ( int t = 0; t < customers; t++ ) {
+			console.info("Starting Cleaning Thread: " + t );
+			Runnable cleanThread = new CleanLdtDataInSet(console, client,
+					dbOps, namespace, t, cleanInterval, cleanDuration, t );
+			executor.execute( cleanThread );
+		}
+		
 		executor.shutdown();
 		// Wait until all threads finish.
 		while ( !executor.isTerminated() ) {
@@ -459,68 +502,6 @@ public class UrlTracker {
 		}
 		
 		console.info("Finished All Threads");
-		
-//		
-//		try {
-//			
-//			// Start a steady-State insertion and expiration cycle.
-//			// For "Generation Count" iterations, generate a pseudo-random
-//			// pattern for a Customer/User record and then insert a site visit
-//			// record.  Since we're using TIME (nano-seconds) for the key, we
-//			// expect that it will be unique.   If we do get a collision (esp
-//			// when we start using multiple threads to drive it), we'll just
-//			// retry (which will give us a different nano-time number).
-//			//
-//			// Also -- we will invoke multiple instances of the client, each
-//			// in a thread,  to increase the traffic to the DB cluster (and thus
-//			// giving it more exercise).
-//			//
-//			// New addition:  If our user has specified more than one thread,
-//			// then we'll fire off multiple threads
-//			Random random = new Random();
-//			int customerSeed = 0;
-//			int userSeed = 0;
-//			String ns = namespace;
-//			String set = null;
-//			String key = null;
-//			Long expire = 0L;
-//			console.info("Done with Load.  Starting Site Visit Generation.");
-//			for (i = 0; i < generateCount; i++) {
-//				customerSeed = random.nextInt(customers);
-//				custRec = new CustomerRecord(console, customerSeed);
-//				
-//				userSeed = random.nextInt(userRecords);
-//				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
-//				
-//				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
-//						userRec.getUserID(), i);
-//				sve.toStorage(client, namespace, ldtOps);
-//				
-//				set = custRec.getCustomerID();
-//				key = userRec.getUserID();
-//				
-//				// At predetermined milestones, perform various actions 
-//				if( i % 10000 == 0 ) {
-//					console.info("Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-//							customerSeed, set, userSeed, key, i);
-//				}
-//				if( i % 20000 == 0 ) {
-//					console.info("QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-//							customerSeed, set, userSeed, key, i);
-//					dbOps.printSiteVisitContents(set, key);
-//				}
-//				if( i % 30000 == 0 ) {
-//					console.info("CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-//							customerSeed, set, userSeed, key, i);
-//					expire = System.nanoTime();
-//					processRemoveExpired( ns, set, key, expire );
-//				}			
-////			} // end for each generateCount
-//			
-//		} catch (Exception e) {
-//			e.printStackTrace();
-//			console.error("Problem with Customer Record: Seed(%d)", i);
-//		}
 
 		console.info("ProcessCommands: Done with GENERATED COMMANDS");
 	} // end generateCommands()
@@ -577,7 +558,7 @@ public class UrlTracker {
 			while (i.hasNext()) {
 				JSONObject commandObj = (JSONObject) i.next();
 				String commandStr = (String) commandObj.get("command");
-				System.out.println("Process Command: " + commandStr );
+				console.debug("Process Command: " + commandStr );
 
 				if( commandStr.equals("new_customer") ) {
 					processNewCustomer( commandObj );

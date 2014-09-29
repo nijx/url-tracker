@@ -2,7 +2,7 @@
 
 ## Overview (3)
 
-This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit" values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.
+This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit" values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.  Note that the Large Map example may be less evolved than the Large Ordered List example.
 
 ## Introduction
 
@@ -86,7 +86,7 @@ The two main problems addressed by the example application are:
 
 We present two different (although, related) solutions to this problem.
 
-The source code for this solution is available on GitHub, and the README.md 
+The source code for this solution is available on GitHub, and this README.md 
 is in:  `https://github.com/aerospike/url-tracker`
 
 ##Installing and Running This Application
@@ -142,7 +142,19 @@ There are two modes in which the application can: "Generate Mode" and "JSON Data
 The commands create records, query records and delete records (explained below).
 "Generate Mode" creates Customer Records, User Records and Site-Visit records according
 to a pattern that is specified by the input parameters.
-The "JSON Data Mode" is the default mode, and if no 
+The "JSON Data Mode" is the default mode, and if there is no override to generate data
+(with the -g option), the program will look for a `commands.json` file.  There is an
+example file shipped with this package, or a different commands file can be created.
+
+##Data Generate Mode
+When the application is driven by a data generator, it uses the following pattern:
+
+* All Customer Sets and customer records (one record per set) are populated
+* For each Customer Set, all User Records are populated
+* In a Pseudo-random pattern, Site-Visit records are generated for user records.
+* At periodic intervals, individual User Records are scrubbed of old site-visit records
+* At periodic intervals, a Customer Set will be scanned and EVERY User's record
+will be scrubbed of old site-visit records.
 
 ##JSON Data Mode
 When the application is data driven (data read from the input file), the data file

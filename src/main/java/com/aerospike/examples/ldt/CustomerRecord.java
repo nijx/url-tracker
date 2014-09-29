@@ -25,7 +25,7 @@ import com.aerospike.client.Record;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
 
-public class CustomerRecord {
+public class CustomerRecord implements IDbRecord {
 
 	private Console console;
 	private String customerName;
