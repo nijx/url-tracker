@@ -27,6 +27,7 @@ import com.aerospike.client.policy.WritePolicy;
 public class SiteVisitEntry {
 	
 	// Set TIME TO LIVE as 30 seconds (in nano-seconds).
+	// 30 000 000 000::  30000000000
 	public static final long TIME_TO_LIVE = 30000000000L;
 
 	private Console console;
@@ -38,6 +39,7 @@ public class SiteVisitEntry {
 	private Long date;
 	private Long expire;
 	private int    index;
+	private String ldtBinName;
 	private WritePolicy writePolicy = new WritePolicy();
 	private Policy policy = new Policy();
 	
@@ -47,7 +49,7 @@ public class SiteVisitEntry {
 	 * @param seed
 	 */
 	public SiteVisitEntry(Console console, String custID, 
-			String userID, int seed) 
+			String userID, int seed, String ldtBinName) 
 	{
 		this.console = console;
 		this.custID = custID;
@@ -57,10 +59,10 @@ public class SiteVisitEntry {
 		this.referrer = String.format("Referrer(%d)", seed);
 		this.pageTitle = String.format("PageTitle(%d)", seed);
 		
+		this.ldtBinName = ldtBinName;
+		
 		// Get the current Time.  However, better to use NANO-seconds rather
 		// than milliseconds -- because we get duplicates with milliseconds.
-//		Date javaDate = new Date(0);
-//		this.date = javaDate.getTime();
 		this.date = System.nanoTime();
 		this.expire = this.date + TIME_TO_LIVE;
 		
@@ -73,7 +75,7 @@ public class SiteVisitEntry {
 	 * @param seed
 	 */
 	public SiteVisitEntry(Console console, JSONObject commandObj, 
-			String namespace, int seed) 
+			String namespace, int seed, String ldtBinName) 
 	{
 		console.debug("Enter SiteVisitEntry");
 		
@@ -100,6 +102,8 @@ public class SiteVisitEntry {
 		this.referrer = referrerStr;
 		this.pageTitle = pageTitleStr;
 		
+		this.ldtBinName = ldtBinName;
+		
 		// Set the current Time and Expire values.
 		this.date = dateLong;
 		this.expire = expireLong;
@@ -123,7 +127,7 @@ public class SiteVisitEntry {
 	 */
 	public SiteVisitEntry(Console console, String namespace, String custID, 
 			String userID, String referrer, String pageTitle, Long date, 
-			Long expire, int seed )
+			Long expire, int seed, String ldtBinName)
 	{
 		this.console = console;	
 		
@@ -135,6 +139,18 @@ public class SiteVisitEntry {
 		this.date = date;
 		this.expire = expire;
 		this.index = seed; 
+		
+		this.ldtBinName = ldtBinName;
+	}
+	
+	/**
+	 * Re-Generate a SiteVisit record based on an existing instance.  In this
+	 * case, we need a NEW expire time (with a new clock value).
+	 */
+	public void refreshSiteVisitEntry() {
+		// Refresh with the current Time.
+		this.date = System.nanoTime();
+		this.expire = this.date + TIME_TO_LIVE;
 	}
 
 	
@@ -152,18 +168,35 @@ public class SiteVisitEntry {
 			throws Exception 
 	{
 		int result = 0;
+		int retryCount = 5;
 		
 		try {
 
 			// Create a MAP object that will hold the Site Visit value.
 			Map<String,Object> siteObjMap = ldtOps.newSiteObject(this);
 			
-			// Store the Map Object in the appropriate LDT
-			ldtOps.storeSiteObject(this, namespace, siteObjMap);		
+			for (int i = 0; i < retryCount; i++){
+				// Store the Map Object in the appropriate LDT
+				result = ldtOps.storeSiteObject(this, namespace, siteObjMap);
+				if (result == 0){
+					break;
+				} else if (result == -2) {
+					// let's retry.  First, refresh, then try again.
+					console.debug("Storage Collision: Retry");
+					Thread.sleep(1);  // Sleep just a millisecond.
+					this.refreshSiteVisitEntry();
+				} else {
+					console.error("General Error on Site Visit Store");
+					break;
+				}
+			}
+			if (result != 0) {
+				console.error("Failure Storing Object");
+			}
 
 		} catch (Exception e){
 			e.printStackTrace();
-			System.out.println("Exception: " + e);
+			console.error("Exception: " + e);
 		}
 
 		return result;
@@ -308,6 +341,16 @@ public class SiteVisitEntry {
 	public void setPolicy(Policy policy) {
 		this.policy = policy;
 	}
+
+	public String getLdtBinName() {
+		return ldtBinName;
+	}
+
+	public void setLdtBinName(String ldtBinName) {
+		this.ldtBinName = ldtBinName;
+	}
+	
+	
 	
 	
 }

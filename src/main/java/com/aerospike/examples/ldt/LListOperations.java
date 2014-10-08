@@ -19,7 +19,7 @@ import com.aerospike.client.policy.WritePolicy;
  * 
 @author toby
 */
-public class LListOperations implements ILdtOperations {
+public class LListOperations implements ILdtOperations, IAppConstants {
 	private AerospikeClient client;
 	private WritePolicy writePolicy;
 	private Policy policy;
@@ -78,8 +78,9 @@ public class LListOperations implements ILdtOperations {
 	 * a particular user.  Order the Site Visit Objects by Expire Time.
 	 * @param commandObj
 	 * @param params
+	 * @return the status:  zero ok, -1 Gen error, -2 Duplicate Key (retry)
 	 */
-	public void storeSiteObject(SiteVisitEntry sve, String namespace,
+	public int storeSiteObject(SiteVisitEntry sve, String namespace,
 			Map<String,Object> siteObjMap  ) 
 	{
 		console.debug("ENTER storeObject:");
@@ -92,20 +93,26 @@ public class LListOperations implements ILdtOperations {
 		try {		
 
 			Key userKey = new Key(namespace, custID, userID);
-			String siteListBin = "Site List";
+			String siteListBin = sve.getLdtBinName();
 
 			// Initialize Large LIST operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, userKey, siteListBin, null);
+					client.getLargeList(this.policy, userKey, siteListBin, 
+							CM_LLIST_MOD);
 
 			// Package up the Map Object and add it to the LLIST.  Note that the
 			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
-			llist.add(Value.getAsMap(siteObjMap));			
+			llist.add(Value.getAsMap(siteObjMap));
 
+		} catch (AerospikeException ae) {
+			console.debug("DB Error:  Retry");
+			return( -2 );
 		} catch (Exception e){
 			e.printStackTrace();
 			System.out.println("Store Site Visit Exception: " + e);
+			return( -1 );
 		}
+		return(0);
 	} // end storeSiteObject()
 
 
@@ -119,7 +126,7 @@ public class LListOperations implements ILdtOperations {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		SiteVisitEntry sve = 
-				new SiteVisitEntry(console, commandObj, ns, 0);
+				new SiteVisitEntry(console, commandObj, ns, 0, UserTraffic.LDT_BIN );
 
 		try {
 			sve.toStorage(client, ns, this);		
@@ -140,13 +147,14 @@ public class LListOperations implements ILdtOperations {
 	public List<Map<String,Object>> 
 	processSiteQuery( String ns, String set, String key ) 
 	{
-		console.debug("ENTER ProcessSiteQuery");
+		console.debug("ENTER ProcessSiteQuery: NS(%s), Set(%s) Key(%s)",
+				ns, set, key);
 		
 		List<Map<String,Object>> scanList = null;
 
 		try {
 			Key userKey = new Key(ns, set, key);
-			String siteListBin = "Site List";
+			String siteListBin = UserTraffic.LDT_BIN;
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
@@ -156,7 +164,7 @@ public class LListOperations implements ILdtOperations {
 			scanList =  (List<Map<String,Object>>) llist.scan();
 			if( console.debugIsOn() ) {
 				for (Map<String,Object> mapItem : scanList) {
-					console.debug("Map Item" + mapItem );
+					console.debug("ScanList Map Item" + mapItem );
 				}
 			}
 
@@ -184,7 +192,7 @@ public class LListOperations implements ILdtOperations {
 		List<Map<String,Object>> scanList = null;
 
 		try {
-			String siteListBin = "Site List";
+			String siteListBin = UserTraffic.LDT_BIN;
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
@@ -206,9 +214,7 @@ public class LListOperations implements ILdtOperations {
 				// For each item in the range query, remove that item from the 
 				// Large List.
 				for (Map<String,Object> mapItem : rangeList) {
-					//				System.out.println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR");
 					console.debug("Removing Map Item(" + mapItem + ") From the LLIST." );
-					//				System.out.println("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR");
 					llist.remove(Value.getAsMap(mapItem));
 				}
 			} catch (AerospikeException ae) {

@@ -104,8 +104,9 @@ public class LMapOperations implements ILdtOperations {
 	 * a particular user.  Manage the Site Visit Objects by Expire Time.
 	 * @param commandObj
 	 * @param params
+	 * 	 * @return the status:  zero ok, -1 Gen error, -2 Duplicate Key (retry)
 	 */
-	public void storeSiteObject(SiteVisitEntry sve, String namespace,
+	public int storeSiteObject(SiteVisitEntry sve, String namespace,
 			Map<String,Object> siteObjMap  ) 
 	{
 		console.debug("ENTER storeObject:");
@@ -118,7 +119,7 @@ public class LMapOperations implements ILdtOperations {
 		try {
 
 			Key userKey = new Key(namespace, custID, userID);
-			String siteListBin = "Site List";
+			String siteListBin = UserTraffic.LDT_BIN;
 
 			// Initialize large MAP operator.
 			com.aerospike.client.large.LargeMap lmap = 
@@ -128,10 +129,15 @@ public class LMapOperations implements ILdtOperations {
 			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
 			lmap.put(Value.get(sve.getExpire()), Value.getAsMap(siteObjMap));			
 
+		} catch (AerospikeException ae) {
+			console.debug("DB Error:  Retry");
+			return( -2 );
 		} catch (Exception e){
 			e.printStackTrace();
-			System.out.println("Exception: " + e);
+			System.out.println("Store Site Visit Exception: " + e);
+			return( -1 );
 		}
+		return(0);
 	} // end storeSiteObject()
 	
 	/**
@@ -144,7 +150,7 @@ public class LMapOperations implements ILdtOperations {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		SiteVisitEntry sve = 
-				new SiteVisitEntry(console, commandObj, ns, 0);
+				new SiteVisitEntry(console, commandObj, ns, 0, UserTraffic.LDT_BIN);
 
 		try {
 			sve.toStorage(client, ns, this);		

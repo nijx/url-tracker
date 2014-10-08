@@ -31,7 +31,7 @@ public interface ILdtOperations {
 	 * @param sve
 	 * @param siteObjMap
 	 */
-	public void storeSiteObject(SiteVisitEntry sve, String ns,
+	public int storeSiteObject(SiteVisitEntry sve, String ns,
 			Map<String,Object> siteObjMap);
 
 	/**

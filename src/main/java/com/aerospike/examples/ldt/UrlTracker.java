@@ -95,154 +95,131 @@ Invocation Parameter Examples:
 
 @author toby
 */
-public class UrlTracker {
+public class UrlTracker implements IAppConstants {
 	
-	private DbOps dbOps; // Interact with Aerospike.
+	private String host; // The name of the host node that we'll connect to
+	private int port;    // The port of the host node
+	private String namespace; // The Namespace that will hold the data
 	
-	private AerospikeClient client;
-	private String seedHost;
-	private int port;
-	private String namespace;
-	private String set;
+	private DbOps dbOps; // Interact with Aerospike Operations
+	private DbParameters parms; // The "bundled" object holding DB values.
+	
+	private AerospikeClient client;// The Aerospike client instance
 	private String inputFileName; // for JSON commands
-	private WritePolicy writePolicy;
-	private Policy policy;
-	private int generateCount;
-	private int cleanInterval; // Sleep time between LDT Clean expiration cycles
-	private long cleanDuration; // Total amount of time to run the clean threads
+	private String ldtType;		// LDT Type (LLIST or LMAP)
+	
+	private int customerRecords; // Number of Sets we're going to use
+	private int userRecords;     // Number of User Records per set	
+	private int generateCount;   // Number of SiteVisit Updates (over all)
+	
+	private int threadCount;	// Number of threads generating data
+	private boolean cleanBefore;// If true, remove all data before test run.
+	private boolean cleanAfter; // If true, remove all data after test run.
 
-	protected Console console;
+	private int cleanIntervalSec; // Sleep time (in sec) between LDT Clean expiration cycles
+	private long cleanDurationSec; // Total amount of time to run the clean threads
+	private int cleanMethod; // Do we clean with client code(1) or UDF code(2)?
+
+	protected Console console; // Easy IO for tracing/debugging
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
+	 * @param console
 	 * @param host
 	 * @param port
 	 * @param namespace
-	 * @param set
 	 * @param fileName
+	 * @param ldtType
+	 * @param clean
+	 * @param remove
+	 * @param customers
+	 * @param records
+	 * @param generateCount
+	 * @param threadCount
+	 * @param cleanIntervalSec
+	 * @param cleanDurationSec
+	 * @param cleanMethod
 	 * @throws AerospikeException
 	 */
-	public UrlTracker(String host, int port, String namespace, String set, 
-			String fileName, String ldtType, Console console, int cleanInterval,
-			long cleanDuration) 
-					throws AerospikeException 
+	public UrlTracker(Console console, String host, int port, String namespace, 
+			String fileName, String ldtType, boolean clean, boolean remove, 
+			int customers, int records, int generateCount, int threadCount,
+			int cleanIntervalSec, long cleanDurationSec, int cleanMethod 
+			)  	throws AerospikeException 
 	{
-		
-		this.dbOps = new DbOps(console, host, port, namespace, ldtType);
-		
-		this.client = dbOps.getClient();
-
-		this.seedHost = host;
+		this.host = host;
 		this.port = port;
 		this.namespace = namespace;
-		this.set = set; // Set will be overridden by the data.
+		this.parms = new DbParameters(host, port, namespace);
+		
+		this.dbOps = new DbOps(console, parms, ldtType);
+		
+		this.client = dbOps.getClient();
 		this.inputFileName = fileName;
-		this.generateCount = 0;  // If non-zero, then generate data rather than
-								// read from JSON file.
-		
-		this.writePolicy = new WritePolicy();
-		this.writePolicy.timeout = 1000;
-		this.writePolicy.maxRetries = 0;
-		this.policy = new Policy();
+		this.ldtType = ldtType;
 		this.console = console;
-		this.cleanInterval = cleanInterval;
-		this.cleanDuration = cleanDuration;
-	}
+		this.cleanBefore = clean;
+		this.cleanAfter = remove;
+		this.customerRecords = customers;
+		this.threadCount = threadCount;
+		this.userRecords = records;
+ 
+		// If non-zero, then generate data rather than read from JSON file.
+		this.generateCount = generateCount; 
+
+		this.cleanIntervalSec = cleanIntervalSec;
+		this.cleanDurationSec = cleanDurationSec;
+		this.cleanMethod = cleanMethod;
+	} // end UrlTracker constructor
+	
 	
 	/**
-	 * Get the user data from the JSON object and create a new customer entry
-	 * in Aerospike.
-	 * 
-	 * @param commandObj
+	 * Run the URL Tracker Application.  Based on the input parameters, we
+	 * can run with commands read from a JSON input file (the default) or
+	 * from a command generator.
 	 */
-	private void processNewCustomer( JSONObject commandObj ) {
-		console.debug("ENTER ProcessNewCustomer");
+	public void runUrlTracker() {
 
-		JSONObject custObj = (JSONObject) commandObj.get("customer");
-		CustomerRecord custRec = new CustomerRecord(console, commandObj, 0);
 		try {
-			custRec.toStorage(client, this.namespace);
+			// Our "DbParmeters" object holds all of the Aerospike Server
+			// values (host, port, namespace) in a single object.
+			DbParameters parms = new DbParameters(host, port, namespace);
+
+			ProcessCommands pc = new ProcessCommands(console, parms, 
+					ldtType, dbOps);
+
+			if (generateCount > 0){
+				// We are using the command generator to drive this application
+				if ( cleanBefore ) {
+					pc.cleanDB(customerRecords, userRecords);
+				}
+				pc.generateCommands(threadCount, customerRecords,
+						userRecords, generateCount, cleanIntervalSec, 
+						cleanDurationSec, cleanMethod );
+				if ( cleanAfter ) {
+					pc.cleanDB(customerRecords, userRecords);
+				}
+			} else {
+				// We are using the JSON file to drive this application
+				pc.processJSONCommands( this.inputFileName );
+			}
+
 		} catch (Exception e) {
-			e.printStackTrace();
-			console.warn("Exception: " + e);
+			console.error("Critical error::" + e.toString());
 		}
 
-	} // end processNewCustomer()
-
-	/**
-	 * Get the user data from the JSON object and create a new user entry
-	 * in Aerospike.
-	 * 
-	 * @param commandObj
-	 */
-	private void processNewUser( JSONObject commandObj ) {
-		console.debug("ENTER ProcessNewUser");
-
-		JSONObject userObj = (JSONObject) commandObj.get("user");
-		UserRecord userRec = new UserRecord(console, commandObj, 0);
-		try {
-			userRec.toStorage(client, this.namespace);
-		} catch (Exception e) {
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-	} // end processNewUser()
-
-
-	/**
-	 * Enter a new Site Visit object in the collection of site visits for
-	 * a particular user.  Order the Site Visit Objects by Expire Time.
-	 * @param commandObj
-	 * @param params
-	 */
-	private void processNewSiteVisit( JSONObject commandObj  ) {
-		console.debug("ENTER ProcessNewSiteVisit:");
-		
-		SiteVisitEntry sve = 
-				new SiteVisitEntry(console, commandObj, namespace, 0);
-		
-		// We have multiple implementations of this operation:
-		// (*) LLIST, with the ordering value on "expire" value.
-		// (*) LMAP, with the unique value on "expire" value.
-		try {
-			sve.toStorage(client, namespace, dbOps.getLdtOps());
-		} catch (Exception e) {
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-	} // end processNewSiteVisit()
+	} // end runUrlTracker()
 	
 
 	/**
-	 * Use the Range Query capability of LLIST to find all values between
-	 * MIN and Expire.  Then use that result list (if any qualify) as the list
-	 * of items to REMOVE from the list.
-	 * Note that a value of NIL in the range will start searching at the LEAST
-	 * (i.e. the leftmost) item.
-	 * 
-	 * @param commandObj
-	 * @param params
+	 * Main Function for URL Tracker.  Get the options from the user and
+	 * launch the URL Tracker application.
+	 * @param args
+	 * @throws AerospikeException
 	 */
-	private void processRemoveExpired(String ns, String set, String keyStr,
-			long expire) 
-	{
-		console.debug("ENTER ProcessRemoveExpired");
-
-		// We have multiple implementations of this operation:
-		// (*) LLIST, with the ordering value on "expire" value.
-		// (*) LMAP, with the unique value on "expire" value.	
-		try {
-			Key key = new Key(ns, set, keyStr);
-			dbOps.getLdtOps().processRemoveExpired(ns, set, key, expire);
-		} catch (Exception e) {
-			e.printStackTrace();
-			console.warn("Exception: " + e);
-		}
-	} // processRemoveExpired()
-
 	public static void main(String[] args) throws AerospikeException {
 		Console console = new Console();
-		console.info("Starting in Main (1.1.7) \n");
+		console.info("Starting in Main (1.2.5) \n");
 
 		try {
 			Options options = new Options();
@@ -259,8 +236,9 @@ public class UrlTracker {
 			options.addOption("r", "records", true, "Generated number of users per customer (default: 20)");
 			options.addOption("v", "visits", true, "Generated number of visits per user (default: 500)");
 			options.addOption("T", "THREADS", true, "Number of threads to use in Generate Mode (default: 1)");
-			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 10 sec)");
+			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 30 sec)");
 			options.addOption("D", "CleanDuration", true, "Total seconds to run clean threads (default: 600 sec)");
+			options.addOption("M", "CleanMethod", true, "Method for cleaning expired values( 1:client, 2:UDF)");
 					
 			options.addOption("C", "CLEAN", true, "CLEAN all records at start of run (default 1)");
 			options.addOption("R", "REMOVE", true, "REMOVE all records at END of run (default 1)");
@@ -296,17 +274,24 @@ public class UrlTracker {
 			String cleanString = cl.getOptionValue("C", "1");
 			boolean clean  = Integer.parseInt(cleanString) == 1;
 			
+			// Remove Command: Should we remove data at end of the test?
 			String removeString = cl.getOptionValue("R", "1");
 			boolean remove  = Integer.parseInt(removeString) == 1;
 			
 			// Amount to sleep (in seconds) between LDT data cleaning runs
-			String intervalString = cl.getOptionValue("I", "10");
+			String intervalString = cl.getOptionValue("I", "30");
 			int intervalSeconds = Integer.parseInt(intervalString);
 			
 			// Total Duration (in seconds) of the time that we'll let the
 			// Cleaning Threads run.
 			String durationString = cl.getOptionValue("D", "600");
 			long durationSeconds = Long.parseLong(durationString);
+			
+			// Method for Cleaning Expired data:
+			// 1: Use the Client Code (scan, get key, call expire method)
+			// 2: Use the UDF Code (call UDF Scan to perform expire on the server)
+			String cleanMethodString = cl.getOptionValue("M", "1");
+			int cleanMethod = Integer.parseInt(cleanMethodString);
 
 			console.info("Host: " + host);
 			console.info("Port: " + port);
@@ -317,13 +302,14 @@ public class UrlTracker {
 			console.info("Customer Records: " + customers);
 			console.info("User Records: " + records);
 			console.info("User Site Visit Records: " + visits);
-			console.info("Generate: " + generateCount );
-			console.info("Threads: " + threadCount );
-			console.info("Clean Before: " + clean );
+			console.info("Generate: " + generateCount);
+			console.info("Threads: " + threadCount);
+			console.info("Clean Before: " + clean);
 			console.info("Remove After: " + remove);
-			console.info("Thread Count: " + threadCount );
-			console.info("Clean Interval: " + intervalSeconds );
-			console.info("Clean Duration: " + durationSeconds );
+			console.info("Thread Count: " + threadCount);
+			console.info("Clean Interval: " + intervalSeconds);
+			console.info("Clean Duration: " + durationSeconds);
+			console.info("Clean Method (1 or 2): " + cleanMethod);
 
 			@SuppressWarnings("unchecked")
 			List<String> cmds = cl.getArgList();
@@ -344,23 +330,13 @@ public class UrlTracker {
 				console.error("Cannot continue.");
 				return;
 			}
-
-			UrlTracker tracker = 
-				new UrlTracker(host, port, namespace, set, fileName, ldtType, 
-						console, intervalSeconds, durationSeconds );
-			if (generateCount > 0){
-				if ( clean ) {
-					tracker.cleanDB(customers, records);
-				}
-				tracker.generateCommands( ldtType, generateCount, customers,
-						records, visits, threadCount, intervalSeconds,
-						durationSeconds);
-				if ( remove ) {
-					tracker.cleanDB(customers, records);
-				}
-			} else {
-				tracker.processJSONCommands( ldtType );
-			}
+			
+			UrlTracker urlTracker = new UrlTracker(console, host, port, namespace, 
+					fileName, ldtType, clean, remove, customers, records, 
+					generateCount, threadCount, intervalSeconds, durationSeconds, 
+					cleanMethod);
+			// Run the main application with the given parameters.
+			urlTracker.runUrlTracker();
 
 		} catch (Exception e) {
 			console.error("Critical error::" + e.toString());
@@ -377,237 +353,63 @@ public class UrlTracker {
 		formatter.printHelp(pw, 100, syntax, "options:", options, 0, 2, null);
 		System.out.println(sw.toString());
 	}
+
+	public DbOps getDbOps() {
+		return dbOps;
+	}
+
+	public void setDbOps(DbOps dbOps) {
+		this.dbOps = dbOps;
+	}
+
+	public DbParameters getParms() {
+		return parms;
+	}
+
+	public void setParms(DbParameters parms) {
+		this.parms = parms;
+	}
+
+	public String getInputFileName() {
+		return inputFileName;
+	}
+
+	public void setInputFileName(String inputFileName) {
+		this.inputFileName = inputFileName;
+	}
+
+	public int getGenerateCount() {
+		return generateCount;
+	}
+
+	public void setGenerateCount(int generateCount) {
+		this.generateCount = generateCount;
+	}
+
+	public int getCleanInterval() {
+		return cleanIntervalSec;
+	}
+
+	public void setCleanInterval(int cleanInterval) {
+		this.cleanIntervalSec = cleanInterval;
+	}
+
+	public long getCleanDuration() {
+		return cleanDurationSec;
+	}
+
+	public void setCleanDuration(long cleanDuration) {
+		this.cleanDurationSec = cleanDuration;
+	}
+
+	public int getCleanMethod() {
+		return cleanMethod;
+	}
+
+	public void setCleanMethod(int cleanMethod) {
+		this.cleanMethod = cleanMethod;
+	}
 	
-	/**
-	 * cleanDB():  
-	 * For the assumed number of customer records and user records, remove them
-	 * all from the database.  This function is generally used BEFORE and AFTER
-	 * a test run -- to start with a clean DB and end with a clean DB.
-	 */
-	public void cleanDB( int customers, int userRecords )  {
-		
-		console.info("Clean DB : Cust(%d) Users(%d) ", customers, userRecords);
-		
-		// For every Set, Remove every Record.  Don't complain if the records
-		// are not there.
-		int i = 0;
-		UserRecord userRec = null;
-		CustomerRecord custRec = null;
-		int errorCounter = 0;
-		try {
-			for (i = 0; i < customers; i++) {
-				custRec = new CustomerRecord(console, i);
-				custRec.remove(client, namespace);
-
-				for (int j = 0; j < userRecords; j++) {
-					userRec = new UserRecord(console, custRec.getCustomerID(), j);
-					userRec.remove(client, namespace);
-				} // end for each user record	
-			} // end for each customer
-			
-		} catch (Exception e) {
-			errorCounter++;
-		}
-
-		console.info("End Clean.  ErrorCount(%d)", errorCounter);
-	} // end cleanDB()
 	
-	/**
-	 * generateCommands():  Rather than READ the commands from a file, we 
-	 * instead GENERATE the commands and then act on them.  We first create
-	 * the specified number of Customer Records (and the AS Set for each one),
-	 * then we create the specified number of User Records for each Customer.
-	 * Then, finally, we use a pseudo-ra the We use a random
-	 * distribution of operations
-	 * 
-	 * (*) NewUser <data>: Add a new User Record to Set N
-	 * (*) NewEntry <data>: Add a new Site Visit entry to User Record in Set N
-	 * (*) QueryUser <data>: Fetch all of the Site Data for a User in Set N
-	 * (*) RemoveExpired: Remove all Site entries that have expired
-	 * 
-	 * as well as the minor commands:
-	 * (-) ScanSet: Show all records in the customer set
-	 * (-) RemoveRecord: Remove a record, by key
-	 * (-) RemoveAllRecords: Remove all records in a customer set
-	 * 
-	 * @throws Exception
-	 */
-	public void generateCommands( String ldtType, int generateCount,
-			int customers, int userRecords, int visitEntries, int threadCount,
-			int cleanInterval, long cleanDuration) 
-	{
-		
-		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) Visits(%d)", 
-				generateCount, customers, userRecords, visitEntries);
-		
-		ILdtOperations ldtOps = dbOps.getLdtOps();
-		
-		// For a given number of "generateCount" iterations, we're going to 
-		// generate a semi-random set of objects that correspond to Customers, 
-		// Users and User-Site Visits.  
-		// There are some guidelines:
-		// In order to make processing easy, we're going to set up the customer
-		// records first, then for each customer, we're going to set up some
-		// number of user records, then we will loop thru, generating user-site
-		// visit records for a user that corresponds to a customer.
-		//
-		// We're going to create these records in a pattern, so all we have to
-		// remember the customer number, and that will generate a customer
-		// record and an entire set of User Records.
-		int i = 0;
-		Record record = null;
-		UserRecord userRec = null;
-		CustomerRecord custRec = null;
-		SiteVisitEntry sve = null;
-		try {
-			for (i = 0; i < customers; i++) {
-				custRec = new CustomerRecord(console, i);
-				custRec.toStorage(client, namespace);
-
-				for (int j = 0; j < userRecords; j++) {
-					userRec = new UserRecord(console, custRec.getCustomerID(), j);
-					userRec.toStorage(client, namespace);
-				} // end for each user record	
-			} // end for each customer
-		} catch (Exception e) {
-			e.printStackTrace();
-			console.error("Problem with Customer Record: Seed(%d)", i);
-		}
-		
-		// Start "threadCount" number of threads that will 
-		int threadIterations = generateCount / threadCount;
-		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-		console.info("Starting (" + threadCount + ") Threads" );
-		for ( int t = 0; t < threadCount; t++ ) {
-			console.info("Starting Thread: " + t );
-			Runnable userTrafficThread = new UserTraffic(console, client, dbOps,
-					namespace, threadIterations, customers, userRecords, t );
-			executor.execute( userTrafficThread );
-		}
-		
-		// Now start up the LDT Cleaning Threads that will scour each
-		// Customer Set periodically and remove expired LDT items
-		console.info("Starting (" + customers + ") Cleaning Threads" );
-		for ( int t = 0; t < customers; t++ ) {
-			console.info("Starting Cleaning Thread: " + t );
-			Runnable cleanThread = new CleanLdtDataInSet(console, client,
-					dbOps, namespace, t, cleanInterval, cleanDuration, t );
-			executor.execute( cleanThread );
-		}
-		
-		executor.shutdown();
-		// Wait until all threads finish.
-		while ( !executor.isTerminated() ) {
-			// Do nothing
-		}
-		
-		console.info("Finished All Threads");
-
-		console.info("ProcessCommands: Done with GENERATED COMMANDS");
-	} // end generateCommands()
-	
-
-	/**
-	 * processCommands():  Read the file of JSON commands and process each one
-	 * of the major commands:
-	 * (*) NewUser <data>: Add a new User Record to Set N
-	 * (*) NewEntry <data>: Add a new Site Visit entry to User Record in Set N
-	 * (*) QueryUser <data>: Fetch all of the Site Data for a User in Set N
-	 * (*) RemoveExpired: Remove all Site entries that have expired
-	 * 
-	 * as well as the minor commands:
-	 * (-) ScanSet: Show all records in the customer set
-	 * (-) RemoveRecord: Remove a record, by key
-	 * (-) RemoveAllRecords: Remove all records in a customer set
-	 * 
-	 * @throws Exception
-	 */
-	public void processJSONCommands( String ldtType ) 
-			throws IOException, AerospikeException, ParseException  
-	{
-		console.info("PROCESS COMMANDS :: JSON File(" + inputFileName + ")");
-
-		try {	
-			
-			// read the json file
-			FileReader reader = new FileReader(inputFileName);
-
-			JSONParser jsonParser = new JSONParser();
-			JSONObject jsonObject = (JSONObject) jsonParser.parse(reader);
-
-			// get a Command File from the outer  JSON object
-			String commandFile = (String) jsonObject.get("command_file");
-			console.info("The command name is: " + commandFile);
-
-			// get an array from the JSON object
-			JSONArray commands = (JSONArray) jsonObject.get("commands");
-
-			// take the elements of the json array
-			for(int i=0; i< commands.size(); i++){
-				console.debug("The " + i + " element of the array: "+commands.get(i));
-			}
-			
-			// Vars to reuse in each case.
-			String ns = namespace;
-			String set = null;
-			String key = null;
-			Long expire;
-
-			// Process each value from the JSON array:
-			Iterator i = commands.iterator();
-			while (i.hasNext()) {
-				JSONObject commandObj = (JSONObject) i.next();
-				String commandStr = (String) commandObj.get("command");
-				console.debug("Process Command: " + commandStr );
-
-				if( commandStr.equals("new_customer") ) {
-					processNewCustomer( commandObj );
-				} else if( commandStr.equals("new_user") ) {
-					processNewUser( commandObj );
-				} else if (commandStr.equals( "new_site_visit")) {
-					processNewSiteVisit( commandObj );
-				} else if (commandStr.equals( "query_user")) {
-					set = (String) commandObj.get("set_name");
-					key = (String) commandObj.get("user_name");
-					dbOps.printSiteVisitContents(set, key );
-				} else if (commandStr.equals( "query_set")) {
-					set = (String) commandObj.get("set_name");
-					dbOps.printSetContents( set );
-				} else if (commandStr.equals( "remove_expired")) {
-					set = (String) commandObj.get("set_name");
-					key = (String) commandObj.get("user_name");
-					expire = (Long) commandObj.get("expire");
-					processRemoveExpired( ns, set, key, expire );
-				} else if (commandStr.equals( "remove_record")) {
-					set = (String) commandObj.get("set_name");
-					key = (String) commandObj.get("user_name");
-					dbOps.removeRecord(set, key );
-				} else if (commandStr.equals( "remove_all_records")) {
-					set = (String) commandObj.get("set_name");
-					dbOps.removeSetRecords(set);
-				}
-			} // for each command
-
-		} catch (FileNotFoundException ex) {
-			System.out.println("FILE NOT FOUND EXCEPTION:" + ex);
-			ex.printStackTrace();
-		} catch (IOException ex) {
-			System.out.println("INPUT/OUTPUT EXCEPTION:" + ex);
-			ex.printStackTrace();
-		} 
-		catch (NullPointerException ex) {
-			ex.printStackTrace();
-		} /** catch (AerospikeException ae ){
-			ae.printStackTrace();
-			System.out.println("AEROSPIKE EXCEPTION");
-		} **/
-		catch (Exception e){
-			System.out.println("GENERAL EXCEPTION:" + e);
-			e.printStackTrace();
-		}
-
-		console.info("ProcessCommands: Done with Input File: " +inputFileName);
-
-	} // end processCommands()
 
 } // end class UrlTracker

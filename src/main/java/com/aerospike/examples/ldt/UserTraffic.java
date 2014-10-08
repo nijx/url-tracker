@@ -49,6 +49,8 @@ public class UserTraffic implements Runnable {
 	private String namespace;
 	int threadNumber;
 	private int iterations = 0;
+	
+	public static final String LDT_BIN = "Site List";
 
 
 	public UserTraffic(Console console, AerospikeClient client, DbOps dbOps,
@@ -112,7 +114,7 @@ public class UserTraffic implements Runnable {
 				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
 				
 				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
-						userRec.getUserID(), i);
+						userRec.getUserID(), i, LDT_BIN);
 				sve.toStorage(client, namespace, ldtOps);
 				
 				set = custRec.getCustomerID();
@@ -121,21 +123,15 @@ public class UserTraffic implements Runnable {
 				Key key = new Key(ns, set, keyStr);	
 				
 				// At predetermined milestones, perform various actions 
-				if( i % 100 == 0 ) {
-					console.info("ThreadNum(%d) Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+				if( i % 1000 == 0 ) {
+					console.info("ThreadNum(%d) Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
 							threadNumber, customerSeed, set, userSeed, keyStr, i);
 				}
-				if( i % 200 == 0 ) {
-					console.info("ThreadNum(%d) QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
+				if( i % 2000 == 0 ) {
+					console.info("ThreadNum(%d) QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
 							threadNumber, customerSeed, set, userSeed, keyStr, i);
 					dbOps.printSiteVisitContents(set, keyStr);
-				}
-//				if( i % 300 == 0 ) {
-//					console.info("ThreadNum(%d) CLEAN: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) SVE(%d)",
-//							threadNumber, customerSeed, set, userSeed, keyStr, i);
-//					expire = System.nanoTime();
-//					ldtOps.processRemoveExpired( ns, set, key, expire );
-//				}			
+				}		
 			} // end for each generateCount
 			
 		} catch (Exception e) {

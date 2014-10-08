@@ -41,6 +41,8 @@ public class DbOps {
 	private int port;
 	private String namespace;
 	ILdtOperations ldtOps;
+	String ldtType;
+	String ldtBinName = UserTraffic.LDT_BIN;
 
 	private WritePolicy writePolicy;
 	private Policy policy;
@@ -51,15 +53,14 @@ public class DbOps {
 	/**
 	 * Set up vars and connect to AS.
 	 */
-	protected DbOps(Console console, String host, int port, String namespace, 
-			String ldtType) 
+	protected DbOps(Console console, DbParameters parms, String ldtType) 
 			throws AerospikeException 
 	{
 		
-		this.namespace = namespace;
-		this.host = host;
-		this.port = port;
-		this.ldtOps = ldtOps;
+		this.namespace = parms.namespace;
+		this.host = parms.host;
+		this.port = parms.port;
+		this.ldtType = ldtType;
 		
 		System.out.println("OPEN AEROSPIKE CLIENT");
 		this.client = new AerospikeClient(host, port);
@@ -126,16 +127,15 @@ public class DbOps {
 		
 		// Show the results of the site query
 
-		System.out.printf("Site Visit Entries: Set(%s) UserId(%s)\n", set, key );
+		console.debug("Site Visit Entries: Set(%s) UserId(%s) ListCnt(%d)\n", 
+				set, key, scanList.size() );
 
 		int counter = 1;
 		for ( Map<String,Object> mapObject : scanList ) {
 			console.debug("(" + counter++ + ") Obj(" + mapObject + ")" );
 		}
 		
-		System.out.println("Site Query Results: " + (counter - 1) + " Objects.");
-	
-//		System.out.println("Scan Result:" + scanList );
+		console.debug("Site Query Results: " + (counter - 1) + " Objects.");
 		
 	} // end processSiteQuery()
 	
@@ -165,8 +165,6 @@ public class DbOps {
 		}
 		console.debug("Done with Query");
 	} // end removeSetRecords()
-	
-	// -----------
 	
 	/**
 	 * Clean all records for a given set;  Remove all of the expired data
@@ -198,9 +196,6 @@ public class DbOps {
 		}
 		console.debug("Done with Query");
 	} // end cleanLdtObjectsInSet()
-	
-	
-	// ..........
 	
 	/**
 	 * Remove a specific record, given a set and a keyString.

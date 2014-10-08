@@ -25,6 +25,13 @@ import com.aerospike.client.Record;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
 
+/**
+ * This class creates and manages the Customer Record for the URL Tracker
+ * application.
+ * 
+ * @author toby
+ * @see UrlTracker
+ */
 public class CustomerRecord implements IDbRecord {
 
 	private Console console;

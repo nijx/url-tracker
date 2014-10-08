@@ -23,17 +23,17 @@ import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.Key;
 
 /**
- * This class represents a thread of execution that performs LDT CLEAN 
- * operations on the User-Site Data in a particular set.  The thread sleeps a 
- * specified amount of time, then wakes up and scans its set.  For each record
- * in the set, it performs a CLEAN operation on the LDT field in the record.
- * The CLEAN operation removes all LDT data items that are older than a given
- * value.
+ * This class represents a thread of execution that performs client-side LDT
+ * CLEAN operations on the User-Site Data in a particular set.  The thread
+ * sleeps a specified amount of time, then wakes up and scans its set.  For each
+ * record in the set, it performs a CLEAN operation on the LDT field in the 
+ * record. The CLEAN operation removes all LDT data items that are older than a 
+ * given value.
  * 
  * @author toby
  *
  */
-public class CleanLdtDataInSet implements Runnable {
+public class CleanLdtDataFromClient implements Runnable {
 
 	private Console console;  	// debug tracking/printing
 	private DbOps dbOps;		// Link to DB and LDT Operations
@@ -46,7 +46,18 @@ public class CleanLdtDataInSet implements Runnable {
 	
 
 
-	public CleanLdtDataInSet(Console console, AerospikeClient client, DbOps dbOps,
+	/**
+	 * Initilize the constructor.
+	 * @param console
+	 * @param client
+	 * @param dbOps
+	 * @param namespace
+	 * @param setNum
+	 * @param sleepInterval
+	 * @param runSeconds
+	 * @param threadNumber
+	 */
+	public CleanLdtDataFromClient(Console console, AerospikeClient client, DbOps dbOps,
 			String namespace,  int setNum, int sleepInterval, long runSeconds,
 			int threadNumber ) 
 	{
@@ -80,15 +91,12 @@ public class CleanLdtDataInSet implements Runnable {
 		String set = custRec.getCustomerID();
 
 		// Remember that these times are in NANO-SECONDS
-		long startTime = System.nanoTime();
-		long currentTime;
+		long startTimeNs = System.nanoTime();
+		long currentTimeNs;
 
 		List<Key> keyList; // The list of record keys in this set.
 		
-//		console.debug("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
 		console.debug("Thread(" + threadNumber +") Starting");
-//		console.debug("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
-
 
 		try {
 
@@ -117,21 +125,18 @@ public class CleanLdtDataInSet implements Runnable {
 
 				// Take a rest.  When we wake up see if our time is up.
 				console.debug("Thread(" + threadNumber +") Sleeping");
-				Thread.sleep(sleepInterval);
-				currentTime = System.nanoTime();
-				if (currentTime - startTime > runPeriod) {
+				Thread.sleep(sleepInterval * 1000);
+				currentTimeNs = System.nanoTime();
+				if (currentTimeNs - startTimeNs > runPeriod) {
 					console.info("All Done with Thread:" + threadNumber);
 					break;
 				}
-
 			} while( true );
-
-
 		} catch (Exception e) {
 			e.printStackTrace();
-			console.error("Problem with Thread(%d) Customer Record: Seed(%d)", i);
+			console.error("Problem with Thread(%d) ", threadNumber);
 		}
 
 	} // end run()
 	
-} // end class CleanLdtDataInSet
+} // end class CleanLdtDataFromClient
