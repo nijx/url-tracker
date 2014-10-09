@@ -153,7 +153,7 @@ public class ProcessCommands implements IAppConstants {
 	 * all from the database.  This function is generally used BEFORE and AFTER
 	 * a test run -- to start with a clean DB and end with a clean DB.
 	 */
-	public void cleanDB( int customers, int userRecords )  {
+	public void cleanDB( long customers, long userRecords )  {
 		
 		console.info("Clean DB : Cust(%d) Users(%d) ", customers, userRecords);
 		
@@ -231,8 +231,8 @@ public class ProcessCommands implements IAppConstants {
 	 * across the different customer sets and user records.
 	 */
 	public void generateCommands(
-			int threadCount, int customerRecords,
-			int userRecords, long generateCount, int cleanIntervalSec, 
+			int threadCount, long customerRecords,
+			long userRecords, long generateCount, int cleanIntervalSec, 
 			long cleanDurationSec, int cleanMethod,
 			boolean noLoad, boolean loadOnly)
 	{
@@ -263,7 +263,7 @@ public class ProcessCommands implements IAppConstants {
 		// record and an entire set of User Records.
 		if (! noLoad){
 			boolean waitResult = true;
-			executor = Executors.newFixedThreadPool(customerRecords);
+			executor = Executors.newFixedThreadPool((int)customerRecords);
 			console.info("Starting (" + customerRecords + ") Threads for Customer Load." );
 			for ( t = 0; t < customerRecords; t++ ) {
 				console.info("Starting Customer Load Thread: " + t );
@@ -310,7 +310,7 @@ public class ProcessCommands implements IAppConstants {
 		
 		// Start up the thread executor:  Set up the pool of threads to be the
 		// Site Visit threads plus the cleaning threads (one per customer).
-		executor = Executors.newFixedThreadPool(threadCount + customerRecords);
+		executor = Executors.newFixedThreadPool(threadCount + (int)customerRecords);
 		console.info("Starting (" + threadCount + ") Threads for SITE DATA." );
 		for ( t = 0; t < threadCount; t++ ) {
 			console.info("Starting Thread: " + t );

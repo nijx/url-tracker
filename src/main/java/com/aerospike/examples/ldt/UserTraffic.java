@@ -52,14 +52,14 @@ public class UserTraffic implements Runnable, IAppConstants {
 	private long timeToLive;
 
 	public UserTraffic(Console console, AerospikeClient client, DbOps dbOps,
-			String namespace, long iterations, int customers, int users,
+			String namespace, long iterations, long customers, long users,
 			int threadNumber, long timeToLive ) 
 	{
 		this.console = console;
 		this.client = client;
 		this.dbOps = dbOps;
-		this.customerMax = customers;
-		this.userMax = users;
+		this.customerMax = (int) customers;
+		this.userMax = (int) users;
 		this.namespace = namespace;
 		this.iterations = iterations;
 		this.threadNumber = threadNumber;
@@ -73,8 +73,8 @@ public class UserTraffic implements Runnable, IAppConstants {
 	 */
 	public void run() {
 		Random random = new Random();
-		int customerSeed = 0;
-		int userSeed = 0;
+		long customerSeed = 0;
+		long userSeed = 0;
 		String ns = namespace;
 		String set = null;
 		String keyStr = null;
@@ -110,7 +110,7 @@ public class UserTraffic implements Runnable, IAppConstants {
 				custRec = new CustomerRecord(console, customerSeed);
 				
 				userSeed = random.nextInt(this.userMax);
-				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
+				userRec = new UserRecord(console, custRec.getCustomerID(), (int) userSeed);
 				
 				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
 						userRec.getUserID(), i, LDT_BIN, this.timeToLive);

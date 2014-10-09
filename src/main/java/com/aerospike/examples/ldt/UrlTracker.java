@@ -108,8 +108,8 @@ public class UrlTracker implements IAppConstants {
 	private String inputFileName; // for JSON commands
 	private String ldtType;		// LDT Type (LLIST or LMAP)
 	
-	private int customerRecords; // Number of Sets we're going to use
-	private int userRecords;     // Number of User Records per set	
+	private long customerRecords; // Number of Sets we're going to use
+	private long userRecords;     // Number of User Records per set	
 	private long generateCount;   // Number of SiteVisit Updates (over all)
 	
 	private int threadCount;	// Number of threads generating data
@@ -149,7 +149,7 @@ public class UrlTracker implements IAppConstants {
 	 */
 	public UrlTracker(Console console, String host, int port, String namespace, 
 			String fileName, String ldtType, boolean clean, boolean remove, 
-			int customers, int records, long generateCount, int threadCount,
+			long customers, long records, long generateCount, int threadCount,
 			int cleanIntervalSec, long cleanDurationSec, int cleanMethod,
 			long timeToLive,  boolean noLoad, boolean loadOnly
 			)  	throws AerospikeException 
@@ -274,13 +274,13 @@ public class UrlTracker implements IAppConstants {
 			String ldtType = cl.getOptionValue("t", "LLIST");
 			
 			String customerString = cl.getOptionValue("c", "10");
-			int customers = Integer.parseInt(customerString);
+			long customers = Long.parseLong(customerString);
 			
 			String recordString = cl.getOptionValue("r", "20");
-			int records = Integer.parseInt(recordString);
+			long records = Long.parseLong(recordString);
 			
 			String visitString = cl.getOptionValue("v", "1000");
-			int aveVisits = Integer.parseInt(visitString);	
+			long aveVisits = Long.parseLong(visitString);	
 			
 			String threadString = cl.getOptionValue("T", "1");
 			int threadCount  = Integer.parseInt(threadString);

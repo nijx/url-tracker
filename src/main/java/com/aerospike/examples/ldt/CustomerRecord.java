@@ -47,7 +47,7 @@ public class CustomerRecord implements IDbRecord {
 	 * @param console
 	 * @param seed
 	 */
-	public CustomerRecord(Console console, int seed) {
+	public CustomerRecord(Console console, long seed) {
 		
 		String name = String.format("CustName(%d)", seed);
 		String id = String.format("CustID(%d)", seed);
@@ -57,7 +57,7 @@ public class CustomerRecord implements IDbRecord {
 		this.customerName = name;
 		this.contactName = contact;
 		this.customerID = id; // doubles as the AS Set Name
-		this.index = seed; // a fake number to help with generation
+		this.index = (int) seed; // a fake number to help with generation
 	}
 	
 	/**

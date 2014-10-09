@@ -34,12 +34,12 @@ public class LoadCustomer implements Runnable, IAppConstants {
 
 	private Console console;
 	private AerospikeClient client;
-	private int customerNumber;
+	private long customerNumber;
 	private String namespace;
-	private int userRecords;
+	private long userRecords;
 
 	public LoadCustomer(Console console, AerospikeClient client,
-			String namespace, int customerNumber, int userRecords ) 
+			String namespace, long customerNumber, long userRecords ) 
 	{
 		this.console = console;
 		this.client = client;
