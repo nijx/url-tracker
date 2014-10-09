@@ -1,1 +1,2 @@
-java -cp target/url-tracker-new-1.0.0-full.jar com.aerospike.examples.ldt.UrlTracker
+#!/bin/bash
+java -cp target/url-tracker-new-1.0.0-full.jar com.aerospike.examples.ldt.UrlTracker $*
