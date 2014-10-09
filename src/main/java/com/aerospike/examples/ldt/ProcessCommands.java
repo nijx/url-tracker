@@ -251,6 +251,8 @@ public class ProcessCommands implements IAppConstants {
 				generateCount, customerRecords, userRecords, threadCount);
 		
 		String namespace = parms.namespace;
+		ExecutorService executor;
+		int t;
 		
 		// Take care of any Database Setup that is needed.  For the advanced
 		// functions, we will need to register any User Defined Functions that
@@ -270,24 +272,23 @@ public class ProcessCommands implements IAppConstants {
 		// remember the customer number, and that will generate a customer
 		// record and an entire set of User Records.
 		if (! noLoad){
-			int i = 0;
-			UserRecord userRec = null;
-			CustomerRecord custRec = null;
-			try {
-				for (i = 0; i < customerRecords; i++) {
-					custRec = new CustomerRecord(console, i);
-					custRec.toStorage(client, namespace);
-
-					for (int j = 0; j < userRecords; j++) {
-						userRec = new UserRecord(console, custRec.getCustomerID(), j);
-						userRec.toStorage(client, namespace);
-					} // end for each user record	
-				} // end for each customer
-			} catch (Exception e) {
-				e.printStackTrace();
-				console.error("Problem with Customer Record: Seed(%d)", i);
+			executor = Executors.newFixedThreadPool(customerRecords);
+			console.info("Starting (" + customerRecords + ") Threads for Customer Load." );
+			for ( t = 0; t < customerRecords; t++ ) {
+				console.info("Starting Thread: " + t );
+				Runnable loadCustomerThread = new LoadCustomer(console, client,
+						namespace, t, userRecords);
+				executor.execute( loadCustomerThread );
 			}
-		}
+			
+			executor.shutdown();
+			// Wait until all threads finish.
+			while ( !executor.isTerminated() ) {
+				// Do nothing
+			}
+		} // end Load Phase
+		
+		console.info("End of Load Phase");
 		
 		// If "loadOnly" is true, then we will not launch the SiteObject Update
 		// threads or the clean threads.  Just return.
@@ -305,10 +306,9 @@ public class ProcessCommands implements IAppConstants {
 		
 		// Start up the thread executor:  Set up the pool of threads to be the
 		// Site Visit threads plus the cleaning threads (one per customer).
-		ExecutorService executor = 
-				Executors.newFixedThreadPool(threadCount + customerRecords);
+		executor = Executors.newFixedThreadPool(threadCount + customerRecords);
 		console.info("Starting (" + threadCount + ") Threads for SITE DATA." );
-		for ( int t = 0; t < threadCount; t++ ) {
+		for ( t = 0; t < threadCount; t++ ) {
 			console.info("Starting Thread: " + t );
 			Runnable userTrafficThread = new UserTraffic(console, client, dbOps,
 					namespace, threadIterations, customerRecords, userRecords, 
@@ -332,7 +332,7 @@ public class ProcessCommands implements IAppConstants {
 			// Customer Set periodically and remove expired LDT items by
 			// bringing data to the client and performing client-side ops.
 			console.info("Starting (" + customerRecords + ") Client Cleaning Threads" );
-			for ( int t = 0; t < customerRecords; t++ ) {
+			for ( t = 0; t < customerRecords; t++ ) {
 				console.info("Starting Cleaning Thread: " + t );
 				Runnable cleanClientThread = new CleanLdtDataFromClient(console, client,
 						dbOps, namespace, t, cleanIntervalSec, cleanDurationSec, t );
@@ -343,7 +343,7 @@ public class ProcessCommands implements IAppConstants {
 			// Customer Set periodically and remove expired LDT items by
 			// invoking a server-side UDF that will do all the work remotely.
 			console.info("Starting (" + customerRecords + ") UDF Cleaning Threads" );
-			for ( int t = 0; t < customerRecords; t++ ) {
+			for ( t = 0; t < customerRecords; t++ ) {
 				console.info("Starting Cleaning Thread: " + t );
 				Runnable cleanUdfThread = new CleanLdtDataWithUDF(console, client,
 						dbOps, parms, t, cleanIntervalSec, cleanDurationSec, t );
