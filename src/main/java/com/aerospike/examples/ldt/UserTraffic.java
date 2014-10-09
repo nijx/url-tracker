@@ -122,15 +122,15 @@ public class UserTraffic implements Runnable, IAppConstants {
 				Key key = new Key(ns, set, keyStr);	
 				
 				// At predetermined milestones, perform various actions 
-				if( i % 1000 == 0 ) {
-					console.info("ThreadNum(%d) Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
+				if( i % 2000 == 0 ) {
+					console.info("Thread(%d) Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
 							threadNumber, customerSeed, set, userSeed, keyStr, i);
 				}
-				if( i % 2000 == 0 ) {
-					console.info("ThreadNum(%d) QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
-							threadNumber, customerSeed, set, userSeed, keyStr, i);
-					dbOps.printSiteVisitContents(set, keyStr);
-				}		
+//				if( i % 2000 == 0 ) {
+//					console.info("ThreadNum(%d) QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
+//							threadNumber, customerSeed, set, userSeed, keyStr, i);
+//					dbOps.printSiteVisitContents(set, keyStr);
+//				}		
 			} // end for each generateCount
 			
 		} catch (Exception e) {

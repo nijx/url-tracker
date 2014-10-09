@@ -22,7 +22,7 @@ local GP;
 local F=false;
 
 -- Used for version tracking in logging/debugging
-local MOD = "CM_LMAP:2014_10_08.A";
+local MOD = "CM_LMAP:2014_10_09.A";
 
 
 -- ======================================================================
@@ -81,26 +81,29 @@ function expire( topRec, binName, expireVal )
   GP=F and info("[ENTER]<%s:%s>BinNameType(%s) expireVal(%s)",
     MOD, meth, tostring(binName), tostring(expireVal));
 
-  local scanList = lmap.scan(topRec, binName);
+  
+  if ( lmap.ldt_exists( topRec, binName, "LMAP" ) == 1 ) then
+    local scanList = lmap.scan(topRec, binName);
 
-  GP=F and info("[DEBUG]<%s:%s> ScanList Shows: %s", MOD, meth, tostring(scanList));
+    GP=F and info("[DEBUG]<%s:%s> ScanList Shows: %s", MOD, meth, tostring(scanList));
 
-  local expireList = list();
-  local objectMap
-  for i = 1, #scanList do
-    objectMap = scanList[i];
-    GP=F and info("[DEBUG]<%s:%s> Examining Object(%s) for expire value", MOD, meth,
-      objectMap);
-    if objectMap.value.expire < expireVal then
-      list.append(expireList, objectMap.name);
+    local expireList = list();
+    local objectMap
+    for i = 1, #scanList do
+      objectMap = scanList[i];
+      GP=F and info("[DEBUG]<%s:%s> Examining Object(%s) for expire value", MOD, meth,
+        objectMap);
+      if objectMap.value.expire < expireVal then
+        list.append(expireList, objectMap.name);
+      end
     end
-  end
 
-  GP=F and info("[DEBUG]<%s:%s> ExpireList Shows: %s", MOD, meth, tostring(expireList));
+    GP=F and info("[DEBUG]<%s:%s> ExpireList Shows: %s", MOD, meth, tostring(expireList));
 
-  for i = i, #expireList do
-    lmap.remove(topRec, binName, expireList[i]);
-  end
+    for i = i, #expireList do
+      lmap.remove(topRec, binName, expireList[i]);
+    end
+  end -- if ldt exists
 
   info("[EXIT]<%s:%s>", MOD, meth );
 end -- lmap_expire()

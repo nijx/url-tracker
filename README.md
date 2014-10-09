@@ -2,7 +2,11 @@
 
 ## Overview (3)
 
-This application manages customer data, user data and site-visit data.  The purpose of this example application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage collections of objects -- in this case, the site-visit data.  This example shows two different ways to manage a collection of "site-visit" values that correspond to user data;  one way uses a Large Ordered List, and the other way uses a Large Map.  Note that the Large Map example may be less evolved than the Large Ordered List example.
+This application manages customer data, user data and site-visit data.  The purpose of this example
+application is to highlight different ways to employ Aerospike Large Data Types (LDTs) to manage
+collections of objects -- in this case, the site-visit data.  This example shows two different ways
+to manage a collection of "site-visit" values that correspond to user data;  one method uses a Large
+Ordered List, and the other method uses a Large Map.
 
 ## Introduction
 
@@ -74,12 +78,11 @@ There are several additional (supportive) operations:
 * Remove a record (by key)
 * Remove all records in a customer set
 
-
 ##Problem
 
 The two main problems addressed by the example application are:
 
-1. How do we represent the list?
+1. How do we represent the Site-Visit Object list?
 2. How do we expire site values that are older than a given value?
 
 ##Solution
@@ -117,18 +120,31 @@ java -cp target/url-tracker-new-1.0.0-full.jar com.aerospike.examples.ldt.UrlTra
 
 The application can be started with the following options:
 
-* -h  "host"      Name or IP address of AS Node (default:  localhost)
-* -p  "port"      Port number of AS Node (default: 3000)
-* -n  "namespace  AS Namespace (default: test)
-* -s  "set"       AS Set Name (default: demo)
-* -u              Print usage options
-* -f  "filename", Input FileName (default: commands.json)
-* -t "LDT type"   LDT Name for Site-Visit Collection (default: LLIST)
-* -g "OpCount"     Generate Data (overrides "-f" option])
-* -c "Cust Count" Number of customer sets and records to generate
-* -r "Rec Count" Number of User Records per customer set to generate
-* -C "flag"       When flag==1, Clean up all previous records before the test run (default: 1)
-* -R "flag "      When flag==1, Remove all records after the test run (default: 1)
+
+```
+options:
+-c,--customer <arg>       Generated Number of Customer Sets (default: 10)
+-C,--Clean <arg>          CLEAN all records at start of run (0==no, 1==yes) (default: 1)
+-d,--debug                Turn on DEBUG level prints.
+-D,--CleanDuration <arg>  Total seconds to run clean threads (default: 3600 sec)
+-f,--filename <arg>       Input File (default: commands.json)
+-g,--generate             Generate input data, rather than use Input File (default: false)
+-h,--host <arg>           Server hostname (default: localhost)
+-I,--CleanInterval <arg>  Time to sleep in seconds between cleaning (default: 1200 sec)
+-L,--TimeToLive <arg>     Number of seconds for a Site Visit Object to live (default: 600)
+-M,--CleanMethod <arg>    Method for cleaning expired values: 1:client, 2:UDF(default)
+-n,--namespace <arg>      Namespace (default: test)
+-N,--NoLoad               Do NOT load Data: Run ONLY the SiteVisit Updates and Clean
+-O,--LoadOnly             Load the Data, but do NOT update SiteVisits or Clean
+-p,--port <arg>           Server port (default: 3000)
+-r,--records <arg>        Generated number of Users per customer (default: 20)
+-R,--Remove <arg>         REMOVE all records at END of run (0==no, 1==yes) (default: 1)
+-s,--set <arg>            Set (default: demo)
+-t,--type <arg>           LDT Type (LMAP or LLIST) (default: LLIST)
+-T,--Threads <arg>        Number of threads to use in Generate Mode (default: 1)
+-u,--usage                Print usage.
+-v,--visits <arg>         Average number of SiteVisits per UserRecord (default: 1000)
+```
 
 By default, the application will expect to connect to an Aerospike Server running
 locally (localhost), at port 3000, using namespace "test" and set "demo", reading
@@ -149,12 +165,34 @@ example file shipped with this package, or a different commands file can be crea
 ##Data Generate Mode
 When the application is driven by a data generator, it uses the following pattern:
 
+* To start in a pristine state, all Customer and User Records are removed
 * All Customer Sets and customer records (one record per set) are populated
 * For each Customer Set, all User Records are populated
 * In a Pseudo-random pattern, Site-Visit records are generated for user records.
-* At periodic intervals, individual User Records are scrubbed of old site-visit records
 * At periodic intervals, a Customer Set will be scanned and EVERY User's record
 will be scrubbed of old site-visit records.
+
+Example Invocations, with explanation:
+
+##Invoke the URL-Tracker in generate mode using LLIST 
+```
+./runapp -h Node_1 -n test -g -c 20 -r 200 -v 40000 -T 8  -M 2 -I 300  -D 84000 -L 600 -t LLIST
+
+```
+
+* -h Node_1 : Connect to a cluster where a node in that cluster is named "Node_1"
+* -n test   : Use the namespace named "test"
+* -g        : Use Generate Mode (as opposed to the JSON File Command mode)
+* -c 20     : Create 20 Customer Sets (and a customer record in each set)
+* -r 200    : Create 200 UserRecords in each set
+* -v 40000  : Generate 40,000 Site Visit objects in each UserRecord of each Customer Set
+* -T 8      : Use 8 parallel threads to write the Site Visit Objects
+* -M 2      : Use the UDF mechanism to find and expire the old SiteVisit data objects
+* -I 300    : Put the clean threads to sleep for 300 seconds between cleaning phases
+* -D 84000  : Run the clean threads for a total duration of 84,000 seconds
+* -L 600    : Set the Time To Live for each Site Visit Object to 600 seconds.
+* -t LLIST  : Use the LLIST LDT to hold the Site Visit Data in each User Record
+
 
 ##JSON Data Mode
 When the application is data driven (data read from the input file), the data file

@@ -85,17 +85,19 @@ function userModule.expire( topRec, binName, expireVal )
   GP=F and info("[ENTER]<%s:%s>BinNameType(%s) expireVal(%s)",
     MOD, meth, tostring(binName), tostring(expireVal));
 
-  local scanList = llist.scan(topRec, binName);
-  GP=F and info("[DEBUG]<%s:%s> ScanList Shows: %s",
-    MOD, meth, tostring(scanList));
+  if ( llist.ldt_exists( topRec, binName, "LLIST" )  == 1 ) then 
+    local scanList = llist.scan(topRec, binName);
+    GP=F and info("[DEBUG]<%s:%s> ScanList Shows: %s",
+      MOD, meth, tostring(scanList));
 
-  local expireList = llist.range(topRec, binName, nil, expireVal);
-  GP=F and info("[DEBUG]<%s:%s> ExpireList Shows: %s",
-    MOD, meth, tostring(expireList));
+    local expireList = llist.range(topRec, binName, nil, expireVal);
+    GP=F and info("[DEBUG]<%s:%s> ExpireList Shows: %s",
+      MOD, meth, tostring(expireList));
 
-  for i = i, #expireList do
-    llist.remove(topRec, binName, expireList[i]);
-  end
+    for i = i, #expireList do
+      llist.remove(topRec, binName, expireList[i]);
+    end
+  end -- end if exists
 
   GP=F and info("[EXIT]<%s:%s>", MOD, meth );
 end -- llist_expire()

@@ -3,19 +3,12 @@ package com.aerospike.examples.ldt;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Iterator;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.cli.PosixParser;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -24,9 +17,6 @@ import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Language;
-import com.aerospike.client.Record;
-import com.aerospike.client.policy.Policy;
-import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.client.task.RegisterTask;
 
 /**
@@ -272,16 +262,30 @@ public class ProcessCommands implements IAppConstants {
 		// remember the customer number, and that will generate a customer
 		// record and an entire set of User Records.
 		if (! noLoad){
+			boolean waitResult = true;
 			executor = Executors.newFixedThreadPool(customerRecords);
 			console.info("Starting (" + customerRecords + ") Threads for Customer Load." );
 			for ( t = 0; t < customerRecords; t++ ) {
-				console.info("Starting Thread: " + t );
+				console.info("Starting Customer Load Thread: " + t );
 				Runnable loadCustomerThread = new LoadCustomer(console, client,
 						namespace, t, userRecords);
 				executor.execute( loadCustomerThread );
 			}
-			
+	
+			console.info("Done with Load Thread Generation.  Now waiting to finish");
 			executor.shutdown();
+			try {
+				// We expect that our Customer and UserRecord loads should 
+				// finish in a few minutes.  We'll give them ten minutes as a
+				// bounding timeout for the threads to complete.
+				// It's the SiteVisit (LDT) writes that could last for days.
+				waitResult = executor.awaitTermination(10L, TimeUnit.MINUTES );
+			} catch (Exception e){
+				System.out.println("Load Thread Wait: GENERAL EXCEPTION:" + e);
+				e.printStackTrace();
+			}
+			console.info("Load Threads Terminated:  WaitResult: " + waitResult);
+			
 			// Wait until all threads finish.
 			while ( !executor.isTerminated() ) {
 				// Do nothing

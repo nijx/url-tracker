@@ -177,7 +177,8 @@ public class SiteVisitEntry {
 			// Create a MAP object that will hold the Site Visit value.
 			Map<String,Object> siteObjMap = ldtOps.newSiteObject(this);
 			
-			for (int i = 0; i < retryCount; i++){
+			int i = 0;
+			for (i = 0; i < retryCount; i++){
 				// Store the Map Object in the appropriate LDT
 				result = ldtOps.storeSiteObject(this, namespace, siteObjMap);
 				if (result == 0){
@@ -185,7 +186,7 @@ public class SiteVisitEntry {
 				} else if (result == -2) {
 					// let's retry.  First, refresh, then try again.
 					console.debug("Storage Collision: Retry");
-					Thread.sleep(1);  // Sleep just a millisecond.
+					Thread.sleep(10);  // Sleep ten milliseconds and try again.
 					this.refreshSiteVisitEntry();
 				} else {
 					console.error("General Error on Site Visit Store");
@@ -193,7 +194,8 @@ public class SiteVisitEntry {
 				}
 			}
 			if (result != 0) {
-				console.error("Failure Storing Object");
+				console.error("Failure Storing Object: ErrResult(%d) Retries(%d)",
+						result, i);
 			}
 
 		} catch (Exception e){
