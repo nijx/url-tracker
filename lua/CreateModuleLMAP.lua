@@ -19,7 +19,7 @@
 
 -- Global Print Flags (set "F" to true to print)
 local GP;
-local F=true;
+local F=false;
 
 -- Used for version tracking in logging/debugging
 local MOD = "CM_LMAP:2014_10_08.A";
