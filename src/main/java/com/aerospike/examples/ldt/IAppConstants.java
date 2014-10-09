@@ -31,5 +31,8 @@ public interface IAppConstants {
 	public static final String LLIST_EXPIRE = "expire";
 	public static final String LMAP_EXPIRE  = "expire";
 	public static final String LDT_EXPIRE   = "expire";
+	
+	// The LDT Bin we'll use for SiteVisit Objects
+	public static final String LDT_BIN      = "LDT BIN";
 
 } // end interface IAppConstants

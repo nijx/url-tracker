@@ -20,6 +20,7 @@ import com.aerospike.client.task.RegisterTask;
  * LMapOperations holds functions that manage the URL Site Visit data
  * with Aerospike Large Map.
  * 
+ * NOTE:
  * Using a Large Map to hold Site Visit data means that there only one value
  * object per name object, so the user attribute that we choose to be the name
  * value will determine how the data is managed and how the data is kept.
@@ -30,25 +31,24 @@ import com.aerospike.client.task.RegisterTask;
  * 
 @author toby
 */
-public class LMapOperations implements ILdtOperations {
+public class LMapOperations implements ILdtOperations, IAppConstants {
 	private AerospikeClient client;
 	private WritePolicy writePolicy;
 	private Policy policy;
+	
 	protected Console console;
 	
-	// For the sake of this example, we are hardcoding the path of the UDF
-	// that we'll be using in the LMAP Scan Filter example.
-	private String serverUdfPath = "lmap_scan_filter.lua";
-	private String clientUdfPath = "udf/lmap_scan_filter.lua";
-//	private String serverUdfPath = "udflib .lua";
-//	private String clientUdfPath = "udf/udflib.lua";
-	private String udfFilter     = "expire_filter";
+//	// For the sake of this example, we are hardcoding the path of the UDF
+//	// that we'll be using in the LMAP Scan Filter example.
+//	private String serverUdfPath = "lmap_scan_filter.lua";
+//	private String clientUdfPath = "udf/lmap_scan_filter.lua";
+////	private String serverUdfPath = "udflib .lua";
+////	private String clientUdfPath = "udf/udflib.lua";
+//	private String udfFilter     = "expire_filter";
 
 	/**
 	 * Constructor for LMAP OPERATION class.
 	 * @param client
-	 * @param namespace
-	 * @param set
 	 * @param console
 	 * @throws AerospikeException
 	 */
@@ -119,11 +119,12 @@ public class LMapOperations implements ILdtOperations {
 		try {
 
 			Key userKey = new Key(namespace, custID, userID);
-			String siteListBin = UserTraffic.LDT_BIN;
+			String ldtBin = LDT_BIN;
 
 			// Initialize large MAP operator.
 			com.aerospike.client.large.LargeMap lmap = 
-					client.getLargeMap(this.policy, userKey, siteListBin, null);
+					client.getLargeMap(this.policy, userKey, ldtBin,
+							CM_LMAP_MOD);
 
 			// Package up the Map Object and add it to the LMAP.  Note that the
 			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
@@ -150,7 +151,7 @@ public class LMapOperations implements ILdtOperations {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		SiteVisitEntry sve = 
-				new SiteVisitEntry(console, commandObj, ns, 0, UserTraffic.LDT_BIN);
+				new SiteVisitEntry(console, commandObj, ns, 0, LDT_BIN);
 
 		try {
 			sve.toStorage(client, ns, this);		
@@ -179,7 +180,7 @@ public class LMapOperations implements ILdtOperations {
 
 		try {
 			Key userKey = new Key(ns, set, key);
-			String siteMapBin = "Site Map";
+			String siteMapBin = LDT_BIN;
 
 			// Initialize large map operator.
 			com.aerospike.client.large.LargeMap lmap = 
@@ -215,18 +216,15 @@ public class LMapOperations implements ILdtOperations {
 		console.debug("ENTER ProcessRemoveExpired");
 
 		try {
-			String siteMapBin = "Site Map";
+			String ldtBin = LDT_BIN;
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeMap lmap = 
-					client.getLargeMap(this.policy, key, siteMapBin, null);
+					client.getLargeMap(this.policy, key, ldtBin, null);
 
-			// Perform a full scan of ALL of the map objects, but employ a
-			// UDF filter to find ONLY those objects that have expired.
-			Value expireCutoffValue = Value.get(expire);
-			Value udfFilterValue = Value.get(udfFilter);
+			// Perform a full scan of ALL of the map objects
 			Map<Long,Map<String,Object>> expireMap =  
-					(Map<Long,Map<String,Object>>) lmap.filter( serverUdfPath, udfFilterValue, expireCutoffValue );
+					(Map<Long,Map<String,Object>>) lmap.scan();
 			
 			// Process the resultMap that comes back ("expireMap"), and show
 			// what's in there.  ALSO, we remove those items that qualify for
@@ -270,24 +268,24 @@ public class LMapOperations implements ILdtOperations {
 		console.debug("Done with Remove Expired");
 	} // processRemoveExpired()
 	
-	/**
-	 * Register the Filter UDF for our LMAP Scan.
-	 * 
-	 * Here's the Aerospike Definition
-	 * public class AerospikeClient { 
-	 *   public final RegisterTask register( Policy policy, String clientPath, 
-	 *                String serverPath, Language language ) 
-	 *                throws AerospikeException }
-	 * 
-	 * @param clientPath : String showing path to the UDF on the client side
-	 * @param serverPath : String showing path to the UDF on the server side
-	 * @throws Exception
-	 */
-	private void registerFilterUDF(String clientPath, String serverPath) throws Exception {
-		RegisterTask task = client.register(this.policy,
-				clientPath, serverPath, Language.LUA);
-		task.waitTillComplete();
-	} // end registerUDF()
+//	/**
+//	 * Register the Filter UDF for our LMAP Scan.
+//	 * 
+//	 * Here's the Aerospike Definition
+//	 * public class AerospikeClient { 
+//	 *   public final RegisterTask register( Policy policy, String clientPath, 
+//	 *                String serverPath, Language language ) 
+//	 *                throws AerospikeException }
+//	 * 
+//	 * @param clientPath : String showing path to the UDF on the client side
+//	 * @param serverPath : String showing path to the UDF on the server side
+//	 * @throws Exception
+//	 */
+//	private void registerFilterUDF(String clientPath, String serverPath) throws Exception {
+//		RegisterTask task = client.register(this.policy,
+//				clientPath, serverPath, Language.LUA);
+//		task.waitTillComplete();
+//	} // end registerUDF()
 
 
 } // end class LMapOperations

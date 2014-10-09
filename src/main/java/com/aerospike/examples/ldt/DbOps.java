@@ -33,7 +33,7 @@ import com.aerospike.client.policy.WritePolicy;
  * General Database class for getting, putting, scanning and removing Aerospike
  * records.  This class holds the STATE for interacting with Aerospike.
  */
-public class DbOps {
+public class DbOps implements IAppConstants {
 	
 	// Manage the DB connection and all DB-related info.
 	private AerospikeClient client;
@@ -42,7 +42,7 @@ public class DbOps {
 	private String namespace;
 	ILdtOperations ldtOps;
 	String ldtType;
-	String ldtBinName = UserTraffic.LDT_BIN;
+	String ldtBinName = LDT_BIN;
 
 	private WritePolicy writePolicy;
 	private Policy policy;
@@ -126,16 +126,22 @@ public class DbOps {
 		scanList = ldtOps.processSiteQuery(this.namespace, set, key);
 		
 		// Show the results of the site query
+		int listSize = 0;
+		if (scanList != null) {
+			listSize = scanList.size();
+		}
 
 		console.debug("Site Visit Entries: Set(%s) UserId(%s) ListCnt(%d)\n", 
-				set, key, scanList.size() );
+				set, key, listSize );
 
-		int counter = 1;
-		for ( Map<String,Object> mapObject : scanList ) {
-			console.debug("(" + counter++ + ") Obj(" + mapObject + ")" );
+		if (listSize > 0){
+			int counter = 1;
+			for ( Map<String,Object> mapObject : scanList ) {
+				console.debug("(" + counter++ + ") Obj(" + mapObject + ")" );
+			}
+
+			console.debug("Site Query Results: " + (counter - 1) + " Objects.");
 		}
-		
-		console.debug("Site Query Results: " + (counter - 1) + " Objects.");
 		
 	} // end processSiteQuery()
 	

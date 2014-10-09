@@ -42,6 +42,7 @@ public class ProcessCommands implements IAppConstants {
 	private String ldtType; // The type of LDT that we'll use
 	private AerospikeClient client;
 	protected Console console; // Easy IO for tracing/debugging
+	private long timeToLive;
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
@@ -52,13 +53,14 @@ public class ProcessCommands implements IAppConstants {
 	 * @throws AerospikeException
 	 */
 	public ProcessCommands(Console console, DbParameters parms, String ldtType, 
-			DbOps dbOps) throws AerospikeException 
+			DbOps dbOps, long timeToLive) throws AerospikeException 
 	{
 		this.parms = parms;
 		this.dbOps = dbOps;	
 		this.ldtType = ldtType;
 		this.client = dbOps.getClient();
 		this.console = console;
+		this.timeToLive = timeToLive;
 	}
 	
 	/**
@@ -113,8 +115,8 @@ public class ProcessCommands implements IAppConstants {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		String ns = this.parms.getNamespace();
-		SiteVisitEntry sve = new SiteVisitEntry(console, commandObj, ns, 0,
-				UserTraffic.LDT_BIN);
+		SiteVisitEntry sve = 
+				new SiteVisitEntry(console, commandObj, ns, 0, LDT_BIN);
 		
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
@@ -190,19 +192,6 @@ public class ProcessCommands implements IAppConstants {
 		console.info("End Clean.  ErrorCount(%d)", errorCounter);
 	} // end cleanDB()
 	
-	/**
-	 * Register the UDF that we'll use to clean the expired data.
-	 * @param client
-	 * @param params
-	 * @throws Exception
-	 */
-	private void registerUdf(AerospikeClient client, DbParameters params) 
-			throws Exception 
-	{
-		RegisterTask task = client.register(params.policy, 
-				"udf/record_example.lua", "record_example.lua", Language.LUA);
-		task.waitTillComplete();
-	}
 	
 	/**
 	 * Set up the Database.  In this case, this is primarily used for 
@@ -253,14 +242,14 @@ public class ProcessCommands implements IAppConstants {
 	 */
 	public void generateCommands(
 			int threadCount, int customerRecords,
-			int userRecords, int generateCount, int cleanIntervalSec, 
-			long cleanDurationSec, int cleanMethod)
+			int userRecords, long generateCount, int cleanIntervalSec, 
+			long cleanDurationSec, int cleanMethod,
+			boolean noLoad, boolean loadOnly)
 	{
 		
 		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) T Count(%d)", 
 				generateCount, customerRecords, userRecords, threadCount);
 		
-		ILdtOperations ldtOps = dbOps.getLdtOps();
 		String namespace = parms.namespace;
 		
 		// Take care of any Database Setup that is needed.  For the advanced
@@ -280,32 +269,38 @@ public class ProcessCommands implements IAppConstants {
 		// We're going to create these records in a pattern, so all we have to
 		// remember the customer number, and that will generate a customer
 		// record and an entire set of User Records.
-		int i = 0;
-		Record record = null;
-		UserRecord userRec = null;
-		CustomerRecord custRec = null;
-		SiteVisitEntry sve = null;
-		try {
-			for (i = 0; i < customerRecords; i++) {
-				custRec = new CustomerRecord(console, i);
-				custRec.toStorage(client, namespace);
+		if (! noLoad){
+			int i = 0;
+			UserRecord userRec = null;
+			CustomerRecord custRec = null;
+			try {
+				for (i = 0; i < customerRecords; i++) {
+					custRec = new CustomerRecord(console, i);
+					custRec.toStorage(client, namespace);
 
-				for (int j = 0; j < userRecords; j++) {
-					userRec = new UserRecord(console, custRec.getCustomerID(), j);
-					userRec.toStorage(client, namespace);
-				} // end for each user record	
-			} // end for each customer
-		} catch (Exception e) {
-			e.printStackTrace();
-			console.error("Problem with Customer Record: Seed(%d)", i);
+					for (int j = 0; j < userRecords; j++) {
+						userRec = new UserRecord(console, custRec.getCustomerID(), j);
+						userRec.toStorage(client, namespace);
+					} // end for each user record	
+				} // end for each customer
+			} catch (Exception e) {
+				e.printStackTrace();
+				console.error("Problem with Customer Record: Seed(%d)", i);
+			}
+		}
+		
+		// If "loadOnly" is true, then we will not launch the SiteObject Update
+		// threads or the clean threads.  Just return.
+		if (loadOnly){
+			return;
 		}
 		
 		// Start "threadCount" number of threads that will 
-		int threadIterations;
+		long threadIterations;
 		if (threadCount >= generateCount) {
 			threadIterations = 1; // don't want this to show up as zero.
 		} else {
-			threadIterations = generateCount / threadCount;
+			threadIterations = generateCount / (long) threadCount;
 		}
 		
 		// Start up the thread executor:  Set up the pool of threads to be the
@@ -316,7 +311,8 @@ public class ProcessCommands implements IAppConstants {
 		for ( int t = 0; t < threadCount; t++ ) {
 			console.info("Starting Thread: " + t );
 			Runnable userTrafficThread = new UserTraffic(console, client, dbOps,
-					namespace, threadIterations, customerRecords, userRecords, t );
+					namespace, threadIterations, customerRecords, userRecords, 
+					t, this.timeToLive );
 			executor.execute( userTrafficThread );
 		}
 		

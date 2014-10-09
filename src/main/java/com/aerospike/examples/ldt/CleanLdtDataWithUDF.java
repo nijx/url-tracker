@@ -101,7 +101,13 @@ public class CleanLdtDataWithUDF implements Runnable, IAppConstants {
 			stmt.setNamespace(parms.namespace);
 			stmt.setSetName(customerSet);
 			
-			String moduleName = CM_LLIST_MOD;
+			String moduleName;
+			if (LLIST.equalsIgnoreCase(dbOps.ldtType)) {
+				moduleName = CM_LLIST_MOD;
+			} else {
+				moduleName = CM_LMAP_MOD;
+			}
+			// Same for both cases.
 			String functionName = LDT_EXPIRE;
 			
 			ExecuteTask task = client.execute(parms.policy, stmt, 

@@ -19,10 +19,10 @@
 
 -- Global Print Flags (set "F" to true to print)
 local GP;
-local F=false;
+local F=true;
 
 -- Used for version tracking in logging/debugging
-local MOD = "CM_LLIST:2014_10_07.A";
+local MOD = "CM_LMAP:2014_10_08.A";
 
 
 -- ======================================================================
@@ -34,19 +34,19 @@ local userModule = {};
 -- ======================================================================
 -- Lua Imports
 -- ======================================================================
--- Import the functions we will be using in Large List to perform the
--- LLIST LDT configuration.
-local llist_settings = require('ldt/settings_llist');
+-- Import the functions we will be using in Large Map to perform the
+-- LMAP LDT configuration.
+local lmap_settings = require('ldt/settings_lmap');
 
 -- General LLIST Functions
-local llist          = require('ldt/lib_llist');
+local lmap          = require('ldt/lib_lmap');
 
 -- LDT Errors
 local ldte           = require('ldt/ldt_errors');
 
 -- ======================================================================
 -- adjust_settings()
--- Set this LLIST for best performance using
+-- Set this LMAP for best performance using
 --   + 100byte objects 
 --   + 8 byte keys
 -- ======================================================================
@@ -58,47 +58,53 @@ local ldte           = require('ldt/ldt_errors');
 -- ======================================================================
 function userModule.adjust_settings( ldtMap )
 
-  -- Use a medium amount of Top Record space for the B+ Tree Root Node
-  llist_settings.set_root_list_max( ldtMap, 100 );
+  -- Use a medium amount of Top Record space for the Hash Directory
+  lmap_settings.set_hash_dir_size( ldtMap, 256 );
 
-  -- With keys + digest == 30bytes, keep the overall sub-rec size under 7kb.
-  llist_settings.set_node_list_max( ldtMap, 200 );
+  -- Use a relatively large Compact List (64)
+  lmap_settings.set_compact_list_threshold( ldtMap, 64 );
 
-  -- With Object Sizes == 100bytes, keep the overall sub-rec size under 7kb.
-  llist_settings.set_leaf_list_max( ldtMap, 70 );
-
-  -- Keep no more than 40 100b objects in the Record Compact List.
-  llist_settings.set_compact_list_threshold( ldtMap, 40 );
+  -- Each Hash Cell can hold up to "threshold" items.  We decide on the
+  -- threshold based on object size and hash dir size.
+  lmap_settings.set_hash_cell_threshold( ldtMap, 2 );
 
 end -- adjust_settings()
 
 -- ========================================================================
 -- expire( topRec, binName, expireVal )
 -- ========================================================================
--- LLIST FILTER FUNCTION:: for Scan UDF calls.
--- ========================================================================
 -- Scan the LDT, locate all elements older than the expireVal, then
 -- remove them.
 -- ========================================================================
-function userModule.expire( topRec, binName, expireVal )
-  local meth = "expire";
+function expire( topRec, binName, expireVal )
+  local meth = "lmap_expire";
   GP=F and info("[ENTER]<%s:%s>BinNameType(%s) expireVal(%s)",
     MOD, meth, tostring(binName), tostring(expireVal));
 
-  local scanList = llist.scan(topRec, binName);
-  GP=F and info("[DEBUG]<%s:%s> ScanList Shows: %s",
-    MOD, meth, tostring(scanList));
+  local scanList = lmap.scan(topRec, binName);
 
-  local expireList = llist.range(topRec, binName, nil, expireVal);
-  GP=F and info("[DEBUG]<%s:%s> ExpireList Shows: %s",
-    MOD, meth, tostring(expireList));
+  GP=F and info("[DEBUG]<%s:%s> ScanList Shows: %s", MOD, meth, tostring(scanList));
 
-  for i = i, #expireList do
-    llist.remove(topRec, binName, expireList[i]);
+  local expireList = list();
+  local objectMap
+  for i = 1, #scanList do
+    objectMap = scanList[i];
+    GP=F and info("[DEBUG]<%s:%s> Examining Object(%s) for expire value", MOD, meth,
+      objectMap);
+    if objectMap.value.expire < expireVal then
+      list.append(expireList, objectMap.name);
+    end
   end
 
-  GP=F and info("[EXIT]<%s:%s>", MOD, meth );
-end -- llist_expire()
+  GP=F and info("[DEBUG]<%s:%s> ExpireList Shows: %s", MOD, meth, tostring(expireList));
+
+  for i = i, #expireList do
+    lmap.remove(topRec, binName, expireList[i]);
+  end
+
+  info("[EXIT]<%s:%s>", MOD, meth );
+end -- lmap_expire()
+
 
 -- ======================================================================
 -- Return the value of this module's table so that others importing this

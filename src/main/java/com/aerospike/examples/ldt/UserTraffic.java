@@ -39,7 +39,7 @@ import com.aerospike.client.Key;
  * @author toby
  *
  */
-public class UserTraffic implements Runnable {
+public class UserTraffic implements Runnable, IAppConstants {
 
 	private Console console;
 	private DbOps dbOps;
@@ -48,14 +48,12 @@ public class UserTraffic implements Runnable {
 	private int userMax = 0;
 	private String namespace;
 	int threadNumber;
-	private int iterations = 0;
-	
-	public static final String LDT_BIN = "Site List";
-
+	private long iterations = 0;
+	private long timeToLive;
 
 	public UserTraffic(Console console, AerospikeClient client, DbOps dbOps,
-			String namespace, int iterations, int customers, int users,
-			int threadNumber ) 
+			String namespace, long iterations, int customers, int users,
+			int threadNumber, long timeToLive ) 
 	{
 		this.console = console;
 		this.client = client;
@@ -66,6 +64,7 @@ public class UserTraffic implements Runnable {
 		this.iterations = iterations;
 		this.threadNumber = threadNumber;
 		this.client = client;
+		this.timeToLive = timeToLive;
 	}
 
 	/**
@@ -81,7 +80,7 @@ public class UserTraffic implements Runnable {
 		String keyStr = null;
 		Long expire = 0L;
 		int i = 0;
-		int generateCount = this.iterations;
+		long generateCount = this.iterations;
 		CustomerRecord custRec = null;
 		UserRecord userRec = null;
 		SiteVisitEntry sve = null;
@@ -114,7 +113,7 @@ public class UserTraffic implements Runnable {
 				userRec = new UserRecord(console, custRec.getCustomerID(), userSeed);
 				
 				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
-						userRec.getUserID(), i, LDT_BIN);
+						userRec.getUserID(), i, LDT_BIN, this.timeToLive);
 				sve.toStorage(client, namespace, ldtOps);
 				
 				set = custRec.getCustomerID();

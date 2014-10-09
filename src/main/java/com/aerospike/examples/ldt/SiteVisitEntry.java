@@ -25,10 +25,6 @@ import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
 
 public class SiteVisitEntry {
-	
-	// Set TIME TO LIVE as 30 seconds (in nano-seconds).
-	// 30 000 000 000::  30000000000
-	public static final long TIME_TO_LIVE = 30000000000L;
 
 	private Console console;
 	private String custID; // The Set Name
@@ -36,20 +32,25 @@ public class SiteVisitEntry {
 	private String url;
 	private String referrer;
 	private String pageTitle;
-	private Long date;
-	private Long expire;
+	private long date;
+	private long expire;
+	private long timeToLive;
 	private int    index;
 	private String ldtBinName;
 	private WritePolicy writePolicy = new WritePolicy();
 	private Policy policy = new Policy();
 	
 	/**
-	 * Generate a customer record based on the seed value.
+	 * Generate a customer record based on the seed value. 
 	 * @param console
+	 * @param custID
+	 * @param userID
 	 * @param seed
+	 * @param ldtBinName
+	 * @param timeToLive -- time expressed in nanoseconds.
 	 */
-	public SiteVisitEntry(Console console, String custID, 
-			String userID, int seed, String ldtBinName) 
+	public SiteVisitEntry(Console console, String custID, String userID, 
+			int seed, String ldtBinName, long timeToLive) 
 	{
 		this.console = console;
 		this.custID = custID;
@@ -63,8 +64,9 @@ public class SiteVisitEntry {
 		
 		// Get the current Time.  However, better to use NANO-seconds rather
 		// than milliseconds -- because we get duplicates with milliseconds.
+		this.timeToLive = timeToLive;
 		this.date = System.nanoTime();
-		this.expire = this.date + TIME_TO_LIVE;
+		this.expire = this.date + timeToLive;
 		
 		this.index = seed; 
 	}
@@ -150,7 +152,7 @@ public class SiteVisitEntry {
 	public void refreshSiteVisitEntry() {
 		// Refresh with the current Time.
 		this.date = System.nanoTime();
-		this.expire = this.date + TIME_TO_LIVE;
+		this.expire = this.date + this.timeToLive;
 	}
 
 	

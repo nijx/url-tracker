@@ -110,15 +110,20 @@ public class UrlTracker implements IAppConstants {
 	
 	private int customerRecords; // Number of Sets we're going to use
 	private int userRecords;     // Number of User Records per set	
-	private int generateCount;   // Number of SiteVisit Updates (over all)
+	private long generateCount;   // Number of SiteVisit Updates (over all)
 	
 	private int threadCount;	// Number of threads generating data
 	private boolean cleanBefore;// If true, remove all data before test run.
 	private boolean cleanAfter; // If true, remove all data after test run.
+	
+	private boolean noLoad; // If true, just start iterations without a data load.
+	private boolean loadOnly; // If true, Load but do NOT perform iterations or clean.
 
 	private int cleanIntervalSec; // Sleep time (in sec) between LDT Clean expiration cycles
 	private long cleanDurationSec; // Total amount of time to run the clean threads
 	private int cleanMethod; // Do we clean with client code(1) or UDF code(2)?
+	
+	private long timeToLive; // The minimum length of time for a site obj to live.
 
 	protected Console console; // Easy IO for tracing/debugging
 
@@ -139,12 +144,14 @@ public class UrlTracker implements IAppConstants {
 	 * @param cleanIntervalSec
 	 * @param cleanDurationSec
 	 * @param cleanMethod
+	 * @param timeToLive
 	 * @throws AerospikeException
 	 */
 	public UrlTracker(Console console, String host, int port, String namespace, 
 			String fileName, String ldtType, boolean clean, boolean remove, 
-			int customers, int records, int generateCount, int threadCount,
-			int cleanIntervalSec, long cleanDurationSec, int cleanMethod 
+			int customers, int records, long generateCount, int threadCount,
+			int cleanIntervalSec, long cleanDurationSec, int cleanMethod,
+			long timeToLive,  boolean noLoad, boolean loadOnly
 			)  	throws AerospikeException 
 	{
 		this.host = host;
@@ -163,6 +170,7 @@ public class UrlTracker implements IAppConstants {
 		this.customerRecords = customers;
 		this.threadCount = threadCount;
 		this.userRecords = records;
+		this.timeToLive = timeToLive;
  
 		// If non-zero, then generate data rather than read from JSON file.
 		this.generateCount = generateCount; 
@@ -170,6 +178,9 @@ public class UrlTracker implements IAppConstants {
 		this.cleanIntervalSec = cleanIntervalSec;
 		this.cleanDurationSec = cleanDurationSec;
 		this.cleanMethod = cleanMethod;
+		
+		this.noLoad = noLoad;
+		this.loadOnly = loadOnly;
 	} // end UrlTracker constructor
 	
 	
@@ -186,17 +197,17 @@ public class UrlTracker implements IAppConstants {
 			DbParameters parms = new DbParameters(host, port, namespace);
 
 			ProcessCommands pc = new ProcessCommands(console, parms, 
-					ldtType, dbOps);
+					ldtType, dbOps, timeToLive);
 
 			if (generateCount > 0){
 				// We are using the command generator to drive this application
-				if ( cleanBefore ) {
+				if ( cleanBefore && !noLoad ) {
 					pc.cleanDB(customerRecords, userRecords);
 				}
 				pc.generateCommands(threadCount, customerRecords,
 						userRecords, generateCount, cleanIntervalSec, 
-						cleanDurationSec, cleanMethod );
-				if ( cleanAfter ) {
+						cleanDurationSec, cleanMethod, noLoad, loadOnly );
+				if ( cleanAfter && !loadOnly ) {
 					pc.cleanDB(customerRecords, userRecords);
 				}
 			} else {
@@ -230,18 +241,25 @@ public class UrlTracker implements IAppConstants {
 			options.addOption("u", "usage", false, "Print usage.");
 			options.addOption("d", "debug", false, "Turn on DEBUG level prints.");
 			options.addOption("f", "filename", true, "Input File (default: commands.json)");
-			options.addOption("t", "type", true, "LDT Type (default: LLIST)");
+			options.addOption("t", "type", true, "LDT Type (LMAP or LLIST) (default: LLIST)");
 			options.addOption("g", "generate", true, "Generate input data, with N update iterations (default: 0)");
 			options.addOption("c", "customer", true, "Generated Number of customer sets (default: 10)");
 			options.addOption("r", "records", true, "Generated number of users per customer (default: 20)");
 			options.addOption("v", "visits", true, "Generated number of visits per user (default: 500)");
+			
 			options.addOption("T", "THREADS", true, "Number of threads to use in Generate Mode (default: 1)");
-			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 30 sec)");
-			options.addOption("D", "CleanDuration", true, "Total seconds to run clean threads (default: 600 sec)");
+			options.addOption("L", "Time to LIVE", true, "Number of seconds for a Site Visit Object to live (default: 600)");
+			options.addOption("S", "Ave LDT Size", true, "Average Number of Site Visit Objects to Generate per User Record (default: 1000");
+			
+			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 1200 sec)");
+			options.addOption("D", "CleanDuration", true, "Total seconds to run clean threads (default: 3600 sec)");
 			options.addOption("M", "CleanMethod", true, "Method for cleaning expired values( 1:client, 2:UDF)");
 					
 			options.addOption("C", "CLEAN", true, "CLEAN all records at start of run (default 1)");
 			options.addOption("R", "REMOVE", true, "REMOVE all records at END of run (default 1)");
+			
+			options.addOption("N", "No Load", false, "Do NOT load Data: Only run the SiteVisit Updates and Clean");
+			options.addOption("O", "Load ONLY", false, "Load the Data, but do NOT update SiteVisits or Clean");
 
 			CommandLineParser parser = new PosixParser();
 			CommandLine cl = parser.parse(options, args, false);
@@ -266,7 +284,7 @@ public class UrlTracker implements IAppConstants {
 			int visits = Integer.parseInt(visitString);
 		
 			String generateString = cl.getOptionValue("g", "0");
-			int generateCount = Integer.parseInt(generateString);	
+			long generateCount = Long.parseLong(generateString);	
 			
 			String threadString = cl.getOptionValue("T", "1");
 			int threadCount  = Integer.parseInt(threadString);
@@ -279,19 +297,49 @@ public class UrlTracker implements IAppConstants {
 			boolean remove  = Integer.parseInt(removeString) == 1;
 			
 			// Amount to sleep (in seconds) between LDT data cleaning runs
-			String intervalString = cl.getOptionValue("I", "30");
+			String intervalString = cl.getOptionValue("I", "1200");
 			int intervalSeconds = Integer.parseInt(intervalString);
 			
 			// Total Duration (in seconds) of the time that we'll let the
 			// Cleaning Threads run.
-			String durationString = cl.getOptionValue("D", "600");
+			String durationString = cl.getOptionValue("D", "3600");
 			long durationSeconds = Long.parseLong(durationString);
+			
+			// Time to Live for Site Visit Objects
+			String ttlString = cl.getOptionValue("L", "600");
+			long timeToLive = Long.parseLong(durationString);
+			
+			// Average LDT Size.  This is used as a multiplier for Generation
+			// count -- and overrides the generation count if it is set.
+			String aveLdtSizeString = cl.getOptionValue("S", "0");
+			long aveLdtSize = Long.parseLong(aveLdtSizeString);
 			
 			// Method for Cleaning Expired data:
 			// 1: Use the Client Code (scan, get key, call expire method)
 			// 2: Use the UDF Code (call UDF Scan to perform expire on the server)
 			String cleanMethodString = cl.getOptionValue("M", "1");
 			int cleanMethod = Integer.parseInt(cleanMethodString);
+			
+			@SuppressWarnings("unchecked")
+			List<String> cmds = cl.getArgList();
+			if (cmds.size() == 0 && cl.hasOption("u")) {
+				logUsage(options);
+				return;
+			}
+			
+			if (cmds.size() == 0 && cl.hasOption("d")) {
+				console.setDebug();
+			}
+			
+			boolean noLoad = false;
+			if (cmds.size() == 0 && cl.hasOption("N")) {
+				noLoad = true;
+			}
+			
+			boolean loadOnly = false;
+			if (cmds.size() == 0 && cl.hasOption("O")) {
+				loadOnly = true;
+			}
 
 			console.info("Host: " + host);
 			console.info("Port: " + port);
@@ -307,23 +355,25 @@ public class UrlTracker implements IAppConstants {
 			console.info("Clean Before: " + clean);
 			console.info("Remove After: " + remove);
 			console.info("Thread Count: " + threadCount);
+			console.info("TimeToLive: " + timeToLive);
+			console.info("Ave LDT Size: " + aveLdtSize);
 			console.info("Clean Interval: " + intervalSeconds);
 			console.info("Clean Duration: " + durationSeconds);
 			console.info("Clean Method (1 or 2): " + cleanMethod);
-
-			@SuppressWarnings("unchecked")
-			List<String> cmds = cl.getArgList();
-			if (cmds.size() == 0 && cl.hasOption("u")) {
-				logUsage(options);
-				return;
-			}
-			
-			if (cmds.size() == 0 && cl.hasOption("d")) {
-				console.setDebug();
+			console.info("No Load: " + noLoad);
+			console.info("Load Only: " + loadOnly);
+	
+			if (aveLdtSize > 0) {
+				long newCount = aveLdtSize * customers * records;
+				console.info("Generate Override:  Was(%d) Now(%d)",
+						generateCount, newCount);
+				generateCount = newCount;
 			}
 			
 			// Validate the LDT implementation that we're going to use
-			if ("LLIST".equals(ldtType) ||  "LMAP".equals(ldtType) ) {
+			if (LLIST.equalsIgnoreCase(ldtType) ||  
+				LMAP.equalsIgnoreCase(ldtType) ) 
+			{
 				console.info("Using LDT Operations:: " + ldtType );
 			} else {
 				console.error("Unknown LDT Type: " + ldtType);
@@ -334,7 +384,7 @@ public class UrlTracker implements IAppConstants {
 			UrlTracker urlTracker = new UrlTracker(console, host, port, namespace, 
 					fileName, ldtType, clean, remove, customers, records, 
 					generateCount, threadCount, intervalSeconds, durationSeconds, 
-					cleanMethod);
+					cleanMethod, timeToLive, noLoad, loadOnly);
 			// Run the main application with the given parameters.
 			urlTracker.runUrlTracker();
 
@@ -378,11 +428,11 @@ public class UrlTracker implements IAppConstants {
 		this.inputFileName = inputFileName;
 	}
 
-	public int getGenerateCount() {
+	public long getGenerateCount() {
 		return generateCount;
 	}
 
-	public void setGenerateCount(int generateCount) {
+	public void setGenerateCount(long generateCount) {
 		this.generateCount = generateCount;
 	}
 
@@ -409,7 +459,14 @@ public class UrlTracker implements IAppConstants {
 	public void setCleanMethod(int cleanMethod) {
 		this.cleanMethod = cleanMethod;
 	}
-	
+
+	public long getTimeToLive() {
+		return timeToLive;
+	}
+
+	public void setTimeToLive(long timeToLive) {
+		this.timeToLive = timeToLive;
+	}
 	
 
 } // end class UrlTracker

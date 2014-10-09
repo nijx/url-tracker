@@ -39,11 +39,11 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 	{
 
 		this.client = client;
-		this.console = console;
 		this.writePolicy = new WritePolicy();
 		this.writePolicy.timeout = 1000;
 		this.writePolicy.maxRetries = 0;
 		this.policy = new Policy();
+		this.console = console;
 	}
 	
 	public void setup() {
@@ -126,7 +126,7 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		SiteVisitEntry sve = 
-				new SiteVisitEntry(console, commandObj, ns, 0, UserTraffic.LDT_BIN );
+				new SiteVisitEntry(console, commandObj, ns, 0, LDT_BIN );
 
 		try {
 			sve.toStorage(client, ns, this);		
@@ -154,7 +154,7 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 
 		try {
 			Key userKey = new Key(ns, set, key);
-			String siteListBin = UserTraffic.LDT_BIN;
+			String siteListBin = LDT_BIN;
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
@@ -192,11 +192,11 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 		List<Map<String,Object>> scanList = null;
 
 		try {
-			String siteListBin = UserTraffic.LDT_BIN;
+			String ldtBin = LDT_BIN;
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, key, siteListBin, null);
+					client.getLargeList(this.policy, key, ldtBin, null);
 
 			// Perform a Range Query -- from "MIN" to "EXPIRE"
 			Value minValue = new Value.NullValue();
