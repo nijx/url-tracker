@@ -126,6 +126,8 @@ public class UrlTracker implements IAppConstants {
 	private long timeToLive; // The minimum length of time for a site obj to live.
 
 	protected Console console; // Easy IO for tracing/debugging
+	
+	public static final String MOD = "URL-Tracker: 2014_10_9A";
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
@@ -337,6 +339,7 @@ public class UrlTracker implements IAppConstants {
 				generateCount = aveVisits * customers * records;;
 			}
 
+			console.info("Module Stamp: " + MOD);
 			console.info("Host: " + host);
 			console.info("Port: " + port);
 			console.info("Namespace: " + namespace);

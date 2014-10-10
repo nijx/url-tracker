@@ -105,7 +105,7 @@ function expire( topRec, binName, expireVal )
     end
   end -- if ldt exists
 
-  info("[EXIT]<%s:%s>", MOD, meth );
+  GP=F and info("[EXIT]<%s:%s>", MOD, meth );
 end -- lmap_expire()
 
 
