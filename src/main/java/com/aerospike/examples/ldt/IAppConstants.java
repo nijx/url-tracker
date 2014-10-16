@@ -34,5 +34,11 @@ public interface IAppConstants {
 	
 	// The LDT Bin we'll use for SiteVisit Objects
 	public static final String LDT_BIN      = "LDT BIN";
+	
+	/**
+	 * AppPhases of the test that we'll use for timing measurements.
+	 */
+	public static enum AppPhases 
+		{ START, CLEAN, SETUP, LOAD, UPDATE, SCAN, REMOVE, LAST };
 
 } // end interface IAppConstants

@@ -188,6 +188,7 @@ public class SiteVisitEntry {
 					console.debug("Storage Collision: Retry");
 					Thread.sleep(10);  // Sleep ten milliseconds and try again.
 					this.refreshSiteVisitEntry();
+					 siteObjMap = ldtOps.newSiteObject(this);
 				} else {
 					console.error("General Error on Site Visit Store");
 					break;

@@ -1,31 +1,17 @@
 package com.aerospike.examples.ldt;
 
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
-import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.policy.Policy;
-import com.aerospike.client.policy.WritePolicy;
 
 /**
  * UrlTracker application to show Aerospike Data Manipulation for an application
@@ -118,16 +104,21 @@ public class UrlTracker implements IAppConstants {
 	
 	private boolean noLoad; // If true, just start iterations without a data load.
 	private boolean loadOnly; // If true, Load but do NOT perform iterations or clean.
+	
+	private boolean doScan;  // If true, Scan entire DB after updates are done.
 
 	private int cleanIntervalSec; // Sleep time (in sec) between LDT Clean expiration cycles
 	private long cleanDurationSec; // Total amount of time to run the clean threads
 	private int cleanMethod; // Do we clean with client code(1) or UDF code(2)?
 	
 	private long timeToLive; // The minimum length of time for a site obj to live.
+	
+	private boolean noCleanThreads; // If true, do not invoke Clean Threads.
 
 	protected Console console; // Easy IO for tracing/debugging
+	private TestTiming testTiming;
 	
-	public static final String MOD = "URL-Tracker: 2014_10_9A";
+	public static final String MOD = "URL-Tracker: 2014_10_14A";
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
@@ -147,13 +138,18 @@ public class UrlTracker implements IAppConstants {
 	 * @param cleanDurationSec
 	 * @param cleanMethod
 	 * @param timeToLive
+	 * @param noLoad
+	 * @param loadOnly
+	 * @param noCleanThreads
+	 * @param doScan
 	 * @throws AerospikeException
 	 */
 	public UrlTracker(Console console, String host, int port, String namespace, 
 			String fileName, String ldtType, boolean clean, boolean remove, 
 			long customers, long records, long generateCount, int threadCount,
 			int cleanIntervalSec, long cleanDurationSec, int cleanMethod,
-			long timeToLive,  boolean noLoad, boolean loadOnly
+			long timeToLive,  boolean noLoad, boolean loadOnly, 
+			boolean noCleanThreads, boolean doScan
 			)  	throws AerospikeException 
 	{
 		this.host = host;
@@ -183,6 +179,12 @@ public class UrlTracker implements IAppConstants {
 		
 		this.noLoad = noLoad;
 		this.loadOnly = loadOnly;
+		
+		this.doScan = doScan;
+		
+		this.noCleanThreads = noCleanThreads;
+		
+		this.testTiming = new TestTiming();
 	} // end UrlTracker constructor
 	
 	
@@ -199,18 +201,25 @@ public class UrlTracker implements IAppConstants {
 			DbParameters parms = new DbParameters(host, port, namespace);
 
 			ProcessCommands pc = new ProcessCommands(console, parms, 
-					ldtType, dbOps, timeToLive);
+					ldtType, dbOps, timeToLive, testTiming);
 
 			if (generateCount > 0){
 				// We are using the command generator to drive this application
 				if ( cleanBefore && !noLoad ) {
+					testTiming.setStartTime( AppPhases.CLEAN);
 					pc.cleanDB(customerRecords, userRecords);
+					testTiming.setEndTime( AppPhases.CLEAN);
 				}
+				
 				pc.generateCommands(threadCount, customerRecords,
 						userRecords, generateCount, cleanIntervalSec, 
-						cleanDurationSec, cleanMethod, noLoad, loadOnly );
+						cleanDurationSec, cleanMethod, noLoad, loadOnly, 
+						noCleanThreads, doScan );
+				
 				if ( cleanAfter && !loadOnly ) {
+					testTiming.setStartTime( AppPhases.REMOVE);
 					pc.cleanDB(customerRecords, userRecords);
+					testTiming.setEndTime( AppPhases.REMOVE);
 				}
 			} else {
 				// We are using the JSON file to drive this application
@@ -220,6 +229,11 @@ public class UrlTracker implements IAppConstants {
 		} catch (Exception e) {
 			console.error("Critical error::" + e.toString());
 		}
+		
+		// All done.  Show our timing stats
+		testTiming.setFinish();
+		testTiming.printStats();
+		
 
 	} // end runUrlTracker()
 	
@@ -255,12 +269,15 @@ public class UrlTracker implements IAppConstants {
 			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 1200 sec)");
 			options.addOption("D", "CleanDuration", true, "Total seconds to run clean threads (default: 3600 sec)");
 			options.addOption("M", "CleanMethod", true, "Method for cleaning expired values: 1:client, 2:UDF(default)");
+			options.addOption("X", "NoCleanThreads", false, "Turn off the Set Cleaning Threads");
 					
 			options.addOption("C", "Clean", true, "CLEAN all records at start of run (0==no, 1==yes) (default: 1)");
 			options.addOption("R", "Remove", true, "REMOVE all records at END of run (0==no, 1==yes) (default: 1)");
 			
 			options.addOption("N", "NoLoad", false, "Do NOT load Data: Run ONLY the SiteVisit Updates and Clean");
 			options.addOption("O", "LoadOnly", false, "Load the Data, but do NOT update SiteVisits or Clean");
+			
+			options.addOption("S", "DoScan", false, "Scan the LDTs after the Update Phase");
 
 			CommandLineParser parser = new PosixParser();
 			CommandLine cl = parser.parse(options, args, false);
@@ -324,6 +341,11 @@ public class UrlTracker implements IAppConstants {
 				console.setDebug();
 			}
 			
+			boolean noCleanThreads = false;
+			if (cmds.size() == 0 && cl.hasOption("X")) {
+				noCleanThreads = true;
+			}
+			
 			boolean noLoad = false;
 			if (cmds.size() == 0 && cl.hasOption("N")) {
 				noLoad = true;
@@ -332,6 +354,11 @@ public class UrlTracker implements IAppConstants {
 			boolean loadOnly = false;
 			if (cmds.size() == 0 && cl.hasOption("O")) {
 				loadOnly = true;
+			}
+			
+			boolean doScan = false;
+			if (cmds.size() == 0 && cl.hasOption("S")) {
+				doScan = true;
 			}
 			
 			long generateCount = 0L;
@@ -361,7 +388,7 @@ public class UrlTracker implements IAppConstants {
 			console.info("Clean Method (1 or 2): " + cleanMethod);
 			console.info("No Load: " + noLoad);
 			console.info("Load Only: " + loadOnly);
-	
+			console.info("No Clean Threads: " + noCleanThreads);
 			
 			// Validate the LDT implementation that we're going to use
 			if (LLIST.equalsIgnoreCase(ldtType) ||  
@@ -377,7 +404,8 @@ public class UrlTracker implements IAppConstants {
 			UrlTracker urlTracker = new UrlTracker(console, host, port, namespace, 
 					fileName, ldtType, clean, remove, customers, records, 
 					generateCount, threadCount, intervalSeconds, durationSeconds, 
-					cleanMethod, timeToLive, noLoad, loadOnly);
+					cleanMethod, timeToLive, noLoad, loadOnly, noCleanThreads,
+					doScan);
 			// Run the main application with the given parameters.
 			urlTracker.runUrlTracker();
 

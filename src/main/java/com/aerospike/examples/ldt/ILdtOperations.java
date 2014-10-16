@@ -3,6 +3,7 @@ package com.aerospike.examples.ldt;
 import java.util.List;
 import java.util.Map;
 
+import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 //import java.io.Console;
 
@@ -52,5 +53,15 @@ public interface ILdtOperations {
 	 */
 	public abstract void processRemoveExpired( String ns, String set, Key key,
 			long expire);
+	
+	/**
+	 * Scan the user's Site Visit List, and return a list of MAP objects.
+	 * @param ns
+	 * @param set
+	 * @param key
+	 * @return
+	 */
+	public abstract List<Map<String,Object>> scanLDT( String ns,
+			String set, Key key) throws AerospikeException;
 
 } // end interface ILdtOperations

@@ -77,14 +77,14 @@ public class CleanLdtDataFromClient implements Runnable {
 	 * the bounds of customer range and user range.
 	 */
 	public void run() {
-		Random random = new Random();
-		int customerSeed = 0;
-		int userSeed = 0;
+//		Random random = new Random();
+//		int customerSeed = 0;
+//		int userSeed = 0;
 		String ns = namespace;
 		Long expire = 0L;
-		int i = 0;
-		UserRecord userRec = null;
-		SiteVisitEntry sve = null;
+//		int i = 0;
+//		UserRecord userRec = null;
+//		SiteVisitEntry sve = null;
 		ILdtOperations ldtOps = dbOps.getLdtOps();
 
 		CustomerRecord custRec = new CustomerRecord(console, setNum);

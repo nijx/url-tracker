@@ -1,5 +1,6 @@
 package com.aerospike.examples.ldt;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,11 +11,9 @@ import org.json.simple.JSONObject;
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
-import com.aerospike.client.Language;
 import com.aerospike.client.Value;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.client.task.RegisterTask;
 
 /**
  * LMapOperations holds functions that manage the URL Site Visit data
@@ -164,7 +163,9 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 
 	/**
 	 * Scan the user's Site Visit List.  Get back a List of Maps that we
-	 * can peruse and print.
+	 * can peruse and print.  Note, although this is currently similar to
+	 * scanLDT(), the intention is that this method may evolve to do more
+	 * complex actions, including filtering.
 	 * @param commandObj
 	 * @param params
 	 */
@@ -204,6 +205,54 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 		
 		return resultList;
 	} // end processSiteQuery()
+	
+	/**
+	 * Scan the user's Site Visit List.  Get back a List of Maps that we
+	 * can peruse and print.
+	 * @param commandObj
+	 * @param params
+	 */
+	@SuppressWarnings("unchecked")
+	public List<Map<String,Object>> scanLDT( String ns, String set, Key userKey ) 
+	throws AerospikeException 
+	{
+		console.debug("ENTER ScanLDT");
+		
+		// Even though we get the results as a large map, we have to return the
+		// objects as a list.
+		List<Map<String,Object>> resultList = null;
+
+		try {
+			String siteMapBin = LDT_BIN;
+
+			// Initialize large map operator.
+			com.aerospike.client.large.LargeMap lmap = 
+					client.getLargeMap(this.policy, userKey, siteMapBin, null);
+
+			// Perform a Scan on all of the Site Visit Objects.  We get back
+			// a large map, which we'll iterate thru.
+			Map<Long, Map<String,Object>> mapResult =  
+					(Map<Long, Map<String,Object>>) lmap.scan();
+			if (mapResult != null) {
+			for (Entry<Long,Map<String,Object>> entry : mapResult.entrySet() ){
+				Long expireValue = (Long) entry.getKey();
+				Map<String,Object> siteObj = (Map<String,Object>) entry.getValue();
+				console.debug("Site Entry: Expire(%d); SiteObj(%s)", expireValue, siteObj.toString());		
+			}
+			} else {
+				resultList = new ArrayList<Map<String,Object>>();
+			}
+
+		} catch (AerospikeException ae) {
+			throw new AerospikeException(ae);
+		} catch (Exception e){
+			e.printStackTrace();
+			console.warn("Exception: " + e);
+		}
+		console.debug("Done with ScanLDT");
+		
+		return resultList;
+	} // end scanLDT()
 	
 	
 	/**

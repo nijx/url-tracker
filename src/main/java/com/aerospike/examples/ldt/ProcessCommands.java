@@ -18,6 +18,7 @@ import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Language;
 import com.aerospike.client.task.RegisterTask;
+import com.aerospike.examples.ldt.IAppConstants.AppPhases;
 
 /**
  * This module holds the collection of methods that are used to process commands
@@ -33,6 +34,7 @@ public class ProcessCommands implements IAppConstants {
 	private AerospikeClient client;
 	protected Console console; // Easy IO for tracing/debugging
 	private long timeToLive;
+	private TestTiming testTiming;
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
@@ -43,7 +45,7 @@ public class ProcessCommands implements IAppConstants {
 	 * @throws AerospikeException
 	 */
 	public ProcessCommands(Console console, DbParameters parms, String ldtType, 
-			DbOps dbOps, long timeToLive) throws AerospikeException 
+			DbOps dbOps, long timeToLive, TestTiming testTiming) throws AerospikeException 
 	{
 		this.parms = parms;
 		this.dbOps = dbOps;	
@@ -51,6 +53,7 @@ public class ProcessCommands implements IAppConstants {
 		this.client = dbOps.getClient();
 		this.console = console;
 		this.timeToLive = timeToLive;
+		this.testTiming = testTiming;
 	}
 	
 	/**
@@ -233,8 +236,8 @@ public class ProcessCommands implements IAppConstants {
 	public void generateCommands(
 			int threadCount, long customerRecords,
 			long userRecords, long generateCount, int cleanIntervalSec, 
-			long cleanDurationSec, int cleanMethod,
-			boolean noLoad, boolean loadOnly)
+			long cleanDurationSec, int cleanMethod, boolean noLoad, 
+			boolean loadOnly, boolean noCleanThreads, boolean doScan)
 	{
 		
 		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) T Count(%d)", 
@@ -244,10 +247,14 @@ public class ProcessCommands implements IAppConstants {
 		ExecutorService executor;
 		int t;
 		
+		boolean waitResult = true;
+		
 		// Take care of any Database Setup that is needed.  For the advanced
 		// functions, we will need to register any User Defined Functions that
 		// we will be using.
+		testTiming.setStartTime( AppPhases.SETUP);
 		databaseSetup();
+		testTiming.setEndTime( AppPhases.SETUP);
 		
 		// For a given number of "generateCount" iterations, we're going to 
 		// generate a semi-random set of objects that correspond to Customers, 
@@ -261,8 +268,13 @@ public class ProcessCommands implements IAppConstants {
 		// We're going to create these records in a pattern, so all we have to
 		// remember the customer number, and that will generate a customer
 		// record and an entire set of User Records.
+		//
+		// To make the load faster (and to make better use of the multi-core
+		// server nodes), we're going to use multiple threads for the load.
+		// We then wait until load is completely finished before we start the
+		// update phase.
 		if (! noLoad){
-			boolean waitResult = true;
+			testTiming.setStartTime( AppPhases.LOAD);
 			executor = Executors.newFixedThreadPool((int)customerRecords);
 			console.info("Starting (" + customerRecords + ") Threads for Customer Load." );
 			for ( t = 0; t < customerRecords; t++ ) {
@@ -290,10 +302,11 @@ public class ProcessCommands implements IAppConstants {
 			while ( !executor.isTerminated() ) {
 				// Do nothing
 			}
+			testTiming.setEndTime( AppPhases.LOAD);
+			console.info("End of Load Phase");
 		} // end Load Phase
 		
-		console.info("End of Load Phase");
-		
+	
 		// If "loadOnly" is true, then we will not launch the SiteObject Update
 		// threads or the clean threads.  Just return.
 		if (loadOnly){
@@ -308,6 +321,7 @@ public class ProcessCommands implements IAppConstants {
 			threadIterations = generateCount / (long) threadCount;
 		}
 		
+		testTiming.setStartTime( AppPhases.UPDATE);
 		// Start up the thread executor:  Set up the pool of threads to be the
 		// Site Visit threads plus the cleaning threads (one per customer).
 		executor = Executors.newFixedThreadPool(threadCount + (int)customerRecords);
@@ -331,37 +345,94 @@ public class ProcessCommands implements IAppConstants {
 		//    for each record in the set.  The UDF will scan the LDT and remove
 		//    any items that have expired.  We expect that this approach will
 		//    significantly outperform the client-side approach.
-		if (cleanMethod == 1) {
-			// Start up the LDT Cleaning Threads that will scour each
-			// Customer Set periodically and remove expired LDT items by
-			// bringing data to the client and performing client-side ops.
-			console.info("Starting (" + customerRecords + ") Client Cleaning Threads" );
-			for ( t = 0; t < customerRecords; t++ ) {
-				console.info("Starting Cleaning Thread: " + t );
-				Runnable cleanClientThread = new CleanLdtDataFromClient(console, client,
-						dbOps, namespace, t, cleanIntervalSec, cleanDurationSec, t );
-				executor.execute( cleanClientThread );
-			} 
-		} else {
-			// Start up the LDT Cleaning Threads that will scour each
-			// Customer Set periodically and remove expired LDT items by
-			// invoking a server-side UDF that will do all the work remotely.
-			console.info("Starting (" + customerRecords + ") UDF Cleaning Threads" );
-			for ( t = 0; t < customerRecords; t++ ) {
-				console.info("Starting Cleaning Thread: " + t );
-				Runnable cleanUdfThread = new CleanLdtDataWithUDF(console, client,
-						dbOps, parms, t, cleanIntervalSec, cleanDurationSec, t );
-				executor.execute( cleanUdfThread );
-			} 
+		if (! noCleanThreads ) {
+			if (cleanMethod == 1) {
+				// Start up the LDT Cleaning Threads that will scour each
+				// Customer Set periodically and remove expired LDT items by
+				// bringing data to the client and performing client-side ops.
+				console.info("Starting (" + customerRecords + ") Client Cleaning Threads" );
+				for ( t = 0; t < customerRecords; t++ ) {
+					console.info("Starting Cleaning Thread: " + t );
+					Runnable cleanClientThread = new CleanLdtDataFromClient(console, client,
+							dbOps, namespace, t, cleanIntervalSec, cleanDurationSec, t );
+					executor.execute( cleanClientThread );
+				} 
+			} else {
+				// Start up the LDT Cleaning Threads that will scour each
+				// Customer Set periodically and remove expired LDT items by
+				// invoking a server-side UDF that will do all the work remotely.
+				console.info("Starting (" + customerRecords + ") UDF Cleaning Threads" );
+				for ( t = 0; t < customerRecords; t++ ) {
+					console.info("Starting Cleaning Thread: " + t );
+					Runnable cleanUdfThread = new CleanLdtDataWithUDF(console, client,
+							dbOps, parms, t, cleanIntervalSec, cleanDurationSec, t );
+					executor.execute( cleanUdfThread );
+				} 
+			}
 		}
 		
+		// Now collect all of the threads and have them terminate before we
+		// move on to the next phase.
 		executor.shutdown();
+		try {
+			// We expect that our Customer and UserRecord loads should 
+			// finish in a few minutes.  We'll give them ten minutes as a
+			// bounding timeout for the threads to complete.
+			// It's the SiteVisit (LDT) writes that could last for days.
+			waitResult = executor.awaitTermination(10L, TimeUnit.MINUTES );
+		} catch (Exception e){
+			System.out.println("Load Thread Wait: GENERAL EXCEPTION:" + e);
+			e.printStackTrace();
+		}
+		console.info("Update Threads Terminated:  WaitResult: " + waitResult);
+		
 		// Wait until all threads finish.
 		while ( !executor.isTerminated() ) {
 			// Do nothing
 		}
 		
-		console.info("Finished All Threads");
+		testTiming.setEndTime( AppPhases.UPDATE);
+			
+		// If asked, perform a SCAN phase of the ENTIRE database, reading
+		// ALL of the LDTs in EVERY record.  We will do some statistics 
+		// gathering from all of the  information coming back from the scans,
+		// but we will not do anything with it (such as print or store) because
+		// that will greatly slow down the test.
+		if ( doScan ){
+			testTiming.setStartTime( AppPhases.SCAN);
+			executor = Executors.newFixedThreadPool((int)customerRecords);
+			console.info("Starting (" + customerRecords + ") Threads for Customer Scan." );
+			for ( t = 0; t < customerRecords; t++ ) {
+				console.debug("Starting Customer Scan Thread: " + t );
+				Runnable scanCustomerThread = 
+					new ScanCustomer(console, client, dbOps, 
+						namespace, t, t);
+				executor.execute( scanCustomerThread );
+			}
+
+			console.info("Done with Scan Thread Generation.  Now waiting to finish");
+			executor.shutdown();
+			try {
+				// The time needed to scan all of the customer sets depends on
+				// the number of sets, the number of records and the size of
+				// the LDTs in the records.  We will make a rough estimate
+				// of a conservative ceiling for timeout.
+				long timeoutCeiling = customerRecords * userRecords;
+				console.info("Scan Thread Timeout Ceiling is (%d) seconds", timeoutCeiling);
+				waitResult = executor.awaitTermination(timeoutCeiling, TimeUnit.SECONDS );
+			} catch (Exception e){
+				System.out.println("Load Thread Wait: GENERAL EXCEPTION:" + e);
+				e.printStackTrace();
+			}
+			console.info("Scan Threads Terminated:  WaitResult: " + waitResult);
+
+			// Wait until all threads finish.
+			while ( !executor.isTerminated() ) {
+				// Do nothing
+			}
+			testTiming.setEndTime( AppPhases.SCAN);
+			console.info("End of Scan Phase");
+		} // end Scan Phase
 
 		console.info("ProcessCommands: Done with GENERATED COMMANDS");
 	} // end generateCommands()

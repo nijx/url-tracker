@@ -139,7 +139,9 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 
 	/**
 	 * Scan the user's Site Visit List.  Get back a List of Maps that we
-	 * can peruse and print.
+	 * can peruse and print.   Note, although this is currently similar to
+	 * scanLDT(), the intention is that this method may evolve to do more
+	 * complex actions, including filtering.
 	 * @param commandObj
 	 * @param params
 	 */
@@ -176,6 +178,45 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 		
 		return scanList;
 	} // end processSiteQuery()
+	
+	/**
+	 * Scan the user's Site Visit List.  
+	 * Get back a List of Maps that we can peruse and print.
+	 * @param commandObj
+	 * @param params
+	 */
+	@SuppressWarnings("unchecked")
+	public List<Map<String,Object>> scanLDT( String ns, String set, Key userKey ) 
+	throws AerospikeException
+	{
+		console.debug("ENTER ScanLDT: NS(%s), Set(%s)", ns, set );
+		
+		List<Map<String,Object>> scanList = null;
+
+		try {
+			String siteListBin = LDT_BIN;
+
+			// Initialize large List operator.
+			com.aerospike.client.large.LargeList llist = 
+					client.getLargeList(this.policy, userKey, siteListBin, null);
+
+			// Perform a Scan on all of the Site Visit Objects
+			scanList =  (List<Map<String,Object>>) llist.scan();
+			if( console.debugIsOn() && scanList != null ) {
+				for (Map<String,Object> mapItem : scanList) {
+					console.debug("ScanList Map Item" + mapItem );
+				}
+			}
+		} catch (AerospikeException ae) {
+			throw new AerospikeException(ae);
+		} catch (Exception e){
+			e.printStackTrace();
+			console.warn("ScanLDT Exception: " + e);
+		}
+		console.debug("Done with ScanLDT");
+		
+		return scanList;
+	} // end scanLDT()
 	
 	/**
 	 * Use the Range Query capability of LLIST to find all values between
