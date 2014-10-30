@@ -29,17 +29,28 @@ import com.aerospike.examples.ldt.IAppConstants.AppPhases;
 public class ProcessCommands implements IAppConstants {
 	
 	private DbOps dbOps; // Interact with Aerospike Operations
-	private DbParameters parms; // Aerospike values bundled in one object.	
+	private DbParameters dbParms; // Aerospike values bundled in one object.	
 	private String ldtType; // The type of LDT that we'll use
 	private AerospikeClient client;
 	protected Console console; // Easy IO for tracing/debugging
 	private long timeToLive;
 	private TestTiming testTiming;
+	
+	// Constants for Customer Emulation Mode.
+	/** Expected number of User Generated Transactions per second.  */
+//	final int USER_TPS = 1500;
+	final int USER_TPS = 400;
+	
+	/** Expected Clean Cycle, in seconds */
+//	final long CLEAN_CYCLE = 86400; // One days worth of seconds
+	final long CLEAN_CYCLE = 600; 
+	
+	private static final String CLASSNAME = "ProcessCommands";
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
 	 * @param console
-	 * @param parms
+	 * @param dbParms
 	 * @param ldtType
 	 * @param dbOps
 	 * @throws AerospikeException
@@ -47,7 +58,7 @@ public class ProcessCommands implements IAppConstants {
 	public ProcessCommands(Console console, DbParameters parms, String ldtType, 
 			DbOps dbOps, long timeToLive, TestTiming testTiming) throws AerospikeException 
 	{
-		this.parms = parms;
+		this.dbParms = parms;
 		this.dbOps = dbOps;	
 		this.ldtType = ldtType;
 		this.client = dbOps.getClient();
@@ -67,7 +78,7 @@ public class ProcessCommands implements IAppConstants {
 
 		JSONObject custObj = (JSONObject) commandObj.get("customer");
 		CustomerRecord custRec = new CustomerRecord(console, commandObj, 0);
-		String ns = this.parms.getNamespace();
+		String ns = this.dbParms.getNamespace();
 		try {
 			custRec.toStorage(client, ns);
 		} catch (Exception e) {
@@ -88,7 +99,7 @@ public class ProcessCommands implements IAppConstants {
 
 		JSONObject userObj = (JSONObject) commandObj.get("user");
 		UserRecord userRec = new UserRecord(console, commandObj, 0);
-		String ns = this.parms.getNamespace();
+		String ns = this.dbParms.getNamespace();
 		try {
 			userRec.toStorage(client, ns);
 		} catch (Exception e) {
@@ -107,15 +118,16 @@ public class ProcessCommands implements IAppConstants {
 	private void processNewSiteVisit( JSONObject commandObj  ) {
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
-		String ns = this.parms.getNamespace();
+		String ns = this.dbParms.getNamespace();
 		SiteVisitEntry sve = 
 				new SiteVisitEntry(console, commandObj, ns, 0, LDT_BIN);
+		String set = sve.getCustomerBaseSet();
 		
 		// We have multiple implementations of this operation:
 		// (*) LLIST, with the ordering value on "expire" value.
 		// (*) LMAP, with the unique value on "expire" value.
 		try {
-			sve.toStorage(client, ns, dbOps.getLdtOps());
+			sve.toStorage(client, ns, set, dbOps.getLdtOps());
 		} catch (Exception e) {
 			e.printStackTrace();
 			console.warn("Exception: " + e);
@@ -156,26 +168,47 @@ public class ProcessCommands implements IAppConstants {
 	 * all from the database.  This function is generally used BEFORE and AFTER
 	 * a test run -- to start with a clean DB and end with a clean DB.
 	 */
-	public void cleanDB( long customers, long userRecords )  {
+	public void cleanDB( long customers, long userRecords, int emulation )  {
 		
 		console.info("Clean DB : Cust(%d) Users(%d) ", customers, userRecords);
 		
 		// For every Set, Remove every Record.  Don't complain if the records
-		// are not there.
+		// are not there.   If we're doing an emulation, make sure that we
+		// also remove ALL Segmented Cache records (which may be far less in
+		// number than the Base User Threads).
 		int i = 0;
 		UserRecord userRec = null;
 		CustomerRecord custRec = null;
 		int errorCounter = 0;
-		String ns = this.parms.getNamespace();
+		String ns = dbParms.getNamespace();
+		String baseNs = dbParms.getBaseNamespace();
+		String cacheNs = dbParms.getCacheNamespace();
 		try {
 			for (i = 0; i < customers; i++) {
 				custRec = new CustomerRecord(console, i);
-				custRec.remove(client, ns);
+				String custBaseSet = custRec.getCustomerBaseSet();
+				String custCacheSet = custRec.getCustomerCacheSet();
+				
+				// There's a customer record ONLY in the Base Set, not in
+				// the Segmented cache set.
+				custRec.remove(client, baseNs, custBaseSet);
 
 				for (int j = 0; j < userRecords; j++) {
-					userRec = new UserRecord(console, custRec.getCustomerID(), j);
-					userRec.remove(client, ns);
+					userRec = new UserRecord(console, dbOps, custBaseSet, j);
+					userRec.remove(client, baseNs, custBaseSet);
 				} // end for each user record	
+				
+				if (emulation > 0) {
+					try {
+						for (int j = 0; j < userRecords; j++) {
+							userRec = new UserRecord(console, dbOps, custBaseSet, j);
+							userRec.remove(client, cacheNs, custCacheSet);
+						} // end for each user record	
+						
+					} catch (Exception e){
+						// ignore all errors;
+					}	
+				}
 			} // end for each customer
 			
 		} catch (Exception e) {
@@ -209,11 +242,11 @@ public class ProcessCommands implements IAppConstants {
 		console.info("Register the Create Modules");
 		try {
 
-			task = client.register(parms.policy, 
+			task = client.register(dbParms.policy, 
 					CM_LLIST_PATH, CM_LLIST_FILE, Language.LUA);
 			task.waitTillComplete();
 
-			task = client.register(parms.policy, 
+			task = client.register(dbParms.policy, 
 					CM_LMAP_PATH, CM_LMAP_FILE, Language.LUA);
 			task.waitTillComplete();
 
@@ -222,7 +255,184 @@ public class ProcessCommands implements IAppConstants {
 			console.error("Problems with registering Create Modules");
 		}
 		console.info("Done with the Create Modules");
-	}
+	} // end databaseSetup()
+	
+
+	/**
+	 * Simulate the actions of a customer that is tracking User Activity.
+	 * Each Customer stores data in a separate Set.  Each Customer Set holds
+	 * UserRecords, and each User Record holds URL-Site Visit data.
+	 * 
+	 * There are 100 customer sets, and about 300 million User Records across
+	 * all of the 100 sets (on average, 3 million User Records per customer set).
+	 * In each User Record is a variable number of URL-Site Visit data objects,
+	 * where each object is about 1kb in size.  On average, most URL Visit 
+	 * lists have around 1,000 data objects, but some lists grow to as large as
+	 * 100,000 data objects.
+	 * 
+	 * Each Customer Set has a "Segmented Cache", where the last Day's worth of
+	 * User Records are cached there.
+	 * 
+	 * When a User Record is accessed, it is updated in the regular set, and
+	 * then if it does not exist in the associated segmented cache, the entire
+	 * LDT is scanned and then written into the cache (along with some other
+	 * changes).
+	 * 
+	 * Records in the Segmented Cache are given a TTL of one day (86400 seconds).
+	 * Records are generated by the user base at an average rate of 1500 records
+	 * per second.  
+	 * 
+	 * We use the input parameter 
+	 * 
+	 * @param customerRecords
+	 * @param userRecords
+	 * @param noLoad
+	 * @param emulationDays
+	 */
+	public void emulateCustomer( int threadCount, long customerRecords, 
+			long userRecords, boolean noLoad, int emulationDays,
+			boolean noCleanThreads, int cleanMethod)
+	{
+		final String meth = "emulateCustomer()";
+		
+		console.info("EMULATE CUSTOMER: Cust(%d) Users(%d) Days(%d)", 
+				customerRecords, userRecords, emulationDays);
+		
+		String baseNamespace = dbParms.baseNamespace;
+		String cacheNamespace = dbParms.cacheNamespace;
+		ExecutorService executor;
+		int t;
+		
+		boolean waitResult = true;
+		
+		// Take care of any Database Setup that is needed.  For the advanced
+		// functions, we will need to register any User Defined Functions that
+		// we will be using.
+		testTiming.setStartTime( AppPhases.SETUP);
+		databaseSetup();
+		testTiming.setEndTime( AppPhases.SETUP);
+		
+		// At system startup, we will load the initial state of the database
+		// (unless "noLoad
+		if (! noLoad){
+			testTiming.setStartTime( AppPhases.LOAD);
+			executor = Executors.newFixedThreadPool((int)customerRecords);
+			console.info("Starting (" + customerRecords + ") Threads for Customer Load." );
+			for ( t = 0; t < customerRecords; t++ ) {
+				console.info("Starting Customer Load Thread: " + t );
+				Runnable loadCustomerThread = new LoadCustomer(console, client,
+						dbOps, baseNamespace, t, userRecords);
+				executor.execute( loadCustomerThread );
+			}
+	
+			console.info("<%s:%s> Done with Load Thread Generation.  Now waiting to finish",
+					CLASSNAME, meth);
+			executor.shutdown();
+			try {
+				// We expect that our Customer and UserRecord loads should 
+				// finish in a few minutes.  We'll give them ten minutes as a
+				// bounding timeout for the threads to complete.
+				// It's the SiteVisit (LDT) writes that could last for days.
+				waitResult = executor.awaitTermination(10L, TimeUnit.MINUTES );
+			} catch (Exception e){
+				console.error("<%s:%s> Load Thread Wait: GENERAL EXCEPTION(%s)",
+						CLASSNAME, meth, e.toString());
+				e.printStackTrace();
+			}
+			console.info("<%s:%s>Load Threads Terminated:  WaitResult(%b)",
+					CLASSNAME, meth, waitResult);
+			
+			// Wait until all threads finish.
+			while ( !executor.isTerminated() ) {
+				// Do nothing
+			}
+			testTiming.setEndTime( AppPhases.LOAD);
+			console.info("<%s:%s> End of Load Phase", CLASSNAME, meth);
+		} // end Load Phase
+		
+		// Start "threadCount" number of threads that will generate updates to
+		// the User Records (adding URL Site Visits) and will also access the
+		// segmented cache -- either populating it or adding to the segment info.
+		// For whatever our threadCount is, we're going to generate USER_TPS
+		// number of events, so each thread has to generate:
+		// (USER_TPS / threadCount) events per second.
+		int threadTPS = USER_TPS / threadCount;
+		
+		testTiming.setStartTime( AppPhases.UPDATE);
+		// Start up the thread executor:  Set up the pool of threads to be the
+		// Site Visit threads plus the cleaning threads (one per customer).
+		executor = Executors.newFixedThreadPool(threadCount + (int)customerRecords);
+		console.info("Starting (" + threadCount + ") Threads for SITE DATA." );
+		for ( t = 0; t < threadCount; t++ ) {
+			console.info("Starting Thread: " + t );
+			Runnable userEmulateThread = new EmulateUser(console, client, dbOps,
+					dbParms, threadTPS, emulationDays, customerRecords, 
+					userRecords, t, this.timeToLive);
+			executor.execute( userEmulateThread );
+		}
+		
+		// Now start the Threads that will perform the Cleaning of Expired
+		// LDT Data.  We have two different methods to choose from:
+		// 1: We can perform a scan on the client, and for each record we get
+		//    back we will extract the LDT Data, and for each expired LDT data
+		//    item, we will delete that item.  For LLIST we can perform this
+		//    more efficiently because we can do a range scan on the timestamp.
+		//    For LMAP we have to scan every item.
+		// 2: We can perform a scan with an integrated Record UDF that is called
+		//    for each record in the set.  The UDF will scan the LDT and remove
+		//    any items that have expired.  We expect that this approach will
+		//    significantly outperform the client-side approach.
+		if (! noCleanThreads ) {
+			console.info("<%s:%s> Cleaning Threads Activated", CLASSNAME, meth);
+			long cleanDurationSec = CLEAN_CYCLE * emulationDays;
+			if (cleanMethod == 1) {
+				// Start up the LDT Cleaning Threads that will scour each
+				// Customer Set periodically and remove expired LDT items by
+				// bringing data to the client and performing client-side ops.
+				console.info("Starting (" + customerRecords + ") Client Cleaning Threads" );
+				for ( t = 0; t < customerRecords; t++ ) {
+					console.info("Starting Cleaning Thread: " + t );
+					Runnable cleanClientThread = new CleanLdtDataFromClient(console, client,
+							dbOps, baseNamespace, t, (int)CLEAN_CYCLE, cleanDurationSec, t );
+					executor.execute( cleanClientThread );
+				} 
+			} else {
+				// Start up the LDT Cleaning Threads that will scour each
+				// Customer Set periodically and remove expired LDT items by
+				// invoking a server-side UDF that will do all the work remotely.
+				console.info("Starting (" + customerRecords + ") UDF Cleaning Threads" );
+				for ( t = 0; t < customerRecords; t++ ) {
+					console.info("Starting Cleaning Thread: " + t );
+					Runnable cleanUdfThread = new CleanLdtDataWithUDF(console, client,
+							dbOps, dbParms, t, (int)CLEAN_CYCLE, cleanDurationSec, t );
+					executor.execute( cleanUdfThread );
+				} 
+			}
+		}
+		
+		// Now collect all of the threads and have them terminate before we
+		// move on to the next phase.
+		executor.shutdown();
+		try {
+			// In this case, we expect to run for days.  Set the timeout for
+			// our projected number of days.
+			waitResult = executor.awaitTermination(emulationDays, TimeUnit.DAYS );
+		} catch (Exception e){
+			console.error("<%s:%s>Load Thread Wait: GENERAL EXCEPTION(%s)",
+					CLASSNAME, meth, e.toString());
+			e.printStackTrace();
+		}
+		console.info("<%s:%s>Update/Clean Threads Terminated:  WaitResult: " + waitResult);
+		
+		// Wait until all threads finish.
+		while ( !executor.isTerminated() ) {
+			// Do nothing
+		}
+		
+		testTiming.setEndTime( AppPhases.UPDATE);
+
+		console.info("<%s:%s>Done with User Emulation Session", CLASSNAME, meth);
+	} // end emulateCustomer()
 	
 	/**
 	 * generateCommands():  Rather than READ the commands from a file, we 
@@ -239,11 +449,12 @@ public class ProcessCommands implements IAppConstants {
 			long cleanDurationSec, int cleanMethod, boolean noLoad, 
 			boolean loadOnly, boolean noCleanThreads, boolean doScan)
 	{
+		final String meth = "generateCommands()";
 		
-		console.info("GENERATE COMMANDS: Count(%d) Cust(%d) Users(%d) T Count(%d)", 
-				generateCount, customerRecords, userRecords, threadCount);
+		console.info("<%s:%s> Count(%d) Cust(%d) Users(%d) T Count(%d)", 
+				CLASSNAME, meth, generateCount, customerRecords, userRecords, threadCount);
 		
-		String namespace = parms.namespace;
+		String namespace = dbParms.namespace;
 		ExecutorService executor;
 		int t;
 		
@@ -280,7 +491,7 @@ public class ProcessCommands implements IAppConstants {
 			for ( t = 0; t < customerRecords; t++ ) {
 				console.info("Starting Customer Load Thread: " + t );
 				Runnable loadCustomerThread = new LoadCustomer(console, client,
-						namespace, t, userRecords);
+						dbOps, namespace, t, userRecords);
 				executor.execute( loadCustomerThread );
 			}
 	
@@ -293,17 +504,19 @@ public class ProcessCommands implements IAppConstants {
 				// It's the SiteVisit (LDT) writes that could last for days.
 				waitResult = executor.awaitTermination(10L, TimeUnit.MINUTES );
 			} catch (Exception e){
-				System.out.println("Load Thread Wait: GENERAL EXCEPTION:" + e);
+				console.error("<%s:%s>Load Thread Wait: GENERAL EXCEPTION(%s)",
+						CLASSNAME, meth, e.toString());
 				e.printStackTrace();
 			}
-			console.info("Load Threads Terminated:  WaitResult: " + waitResult);
+			console.info("<%s:%s>Load Threads Terminated:  WaitResult(%b)",
+					CLASSNAME, meth, waitResult);
 			
 			// Wait until all threads finish.
 			while ( !executor.isTerminated() ) {
 				// Do nothing
 			}
 			testTiming.setEndTime( AppPhases.LOAD);
-			console.info("End of Load Phase");
+			console.info("<%s:%s>End of Load Phase", CLASSNAME, meth);
 		} // end Load Phase
 		
 	
@@ -313,7 +526,8 @@ public class ProcessCommands implements IAppConstants {
 			return;
 		}
 		
-		// Start "threadCount" number of threads that will 
+		// Start "threadCount" number of threads that will populate the
+		// User Site Visit LDTs.
 		long threadIterations;
 		if (threadCount >= generateCount) {
 			threadIterations = 1; // don't want this to show up as zero.
@@ -346,6 +560,7 @@ public class ProcessCommands implements IAppConstants {
 		//    any items that have expired.  We expect that this approach will
 		//    significantly outperform the client-side approach.
 		if (! noCleanThreads ) {
+			console.info("<%s:%s> Cleaning Threads Activated", CLASSNAME, meth);
 			if (cleanMethod == 1) {
 				// Start up the LDT Cleaning Threads that will scour each
 				// Customer Set periodically and remove expired LDT items by
@@ -365,7 +580,7 @@ public class ProcessCommands implements IAppConstants {
 				for ( t = 0; t < customerRecords; t++ ) {
 					console.info("Starting Cleaning Thread: " + t );
 					Runnable cleanUdfThread = new CleanLdtDataWithUDF(console, client,
-							dbOps, parms, t, cleanIntervalSec, cleanDurationSec, t );
+							dbOps, dbParms, t, cleanIntervalSec, cleanDurationSec, t );
 					executor.execute( cleanUdfThread );
 				} 
 			}
@@ -381,10 +596,12 @@ public class ProcessCommands implements IAppConstants {
 			// It's the SiteVisit (LDT) writes that could last for days.
 			waitResult = executor.awaitTermination(10L, TimeUnit.MINUTES );
 		} catch (Exception e){
-			System.out.println("Load Thread Wait: GENERAL EXCEPTION:" + e);
+			console.error("<%s:%s>Load Thread Wait: GENERAL EXCEPTION(%s)",
+					CLASSNAME, meth, e.toString());
 			e.printStackTrace();
 		}
-		console.info("Update Threads Terminated:  WaitResult: " + waitResult);
+		console.info("<%s:%s>Update/Clean Threads Terminated: WaitResult(%b)",
+				CLASSNAME, meth, waitResult);
 		
 		// Wait until all threads finish.
 		while ( !executor.isTerminated() ) {
@@ -479,7 +696,7 @@ public class ProcessCommands implements IAppConstants {
 			}
 			
 			// Vars to reuse in each case.
-			String ns = this.parms.namespace;
+			String ns = this.dbParms.namespace;
 			String set = null;
 			String key = null;
 			Long expire;
@@ -550,11 +767,11 @@ public class ProcessCommands implements IAppConstants {
 	}
 
 	public DbParameters getParms() {
-		return parms;
+		return dbParms;
 	}
 
 	public void setParms(DbParameters parms) {
-		this.parms = parms;
+		this.dbParms = parms;
 	}
 
 	public String getLdtType() {

@@ -27,7 +27,7 @@ public interface IDbRecord {
 	/**
 	 * Remove this record from the database.
 	 */
-	public Record  remove(AerospikeClient client, String namespace) 
+	public Record  remove(AerospikeClient client, String namespace, String setName) 
 			throws Exception;
 
 

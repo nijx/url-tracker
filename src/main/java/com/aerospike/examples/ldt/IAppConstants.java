@@ -35,6 +35,13 @@ public interface IAppConstants {
 	// The LDT Bin we'll use for SiteVisit Objects
 	public static final String LDT_BIN      = "LDT BIN";
 	
+	// Cache Record TTL Value
+//	public static final int    CACHE_TTL    = 300;  // 5 minutes (for testing)
+	public static final int    CACHE_TTL    = 86400; // Expires in one day.
+	
+	// Aerospike Errors
+	public static final int AS_ERR_UNIQUE   = 1402; // Unique Value collision
+	
 	/**
 	 * AppPhases of the test that we'll use for timing measurements.
 	 */

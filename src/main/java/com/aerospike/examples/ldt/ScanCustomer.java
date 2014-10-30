@@ -96,7 +96,7 @@ public class ScanCustomer implements Runnable, IAppConstants {
 			for (Key key : keyList) {
 				console.debug("Key:: " + key );
 				try {
-					objectList = ldtOps.scanLDT(namespace, customerSet, key);
+					objectList = ldtOps.scanLDT(key);
 					if (objectList != null) {
 						ldtSize = objectList.size();
 						if (ldtSize > maxLdtSize) maxLdtSize = ldtSize;
@@ -107,6 +107,8 @@ public class ScanCustomer implements Runnable, IAppConstants {
 				} catch (AerospikeException ae) {
 					// Ignore these for now.  It is most likely that the bin
 					// does not exist in this record (which happens).
+					console.error("Aerospike Error Code(%d) Error Message(%s)",
+							ae.getResultCode(), ae.getMessage());
 				}
 			}
 		} catch (Exception e) {

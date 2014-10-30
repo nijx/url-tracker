@@ -25,7 +25,7 @@ import com.aerospike.client.Record;
 import com.aerospike.client.policy.Policy;
 import com.aerospike.client.policy.WritePolicy;
 
-public class UserRecord implements IDbRecord {
+public class UserRecord implements IDbRecord, IAppConstants {
 
 	private Console console;
 	private String userID;
@@ -33,10 +33,13 @@ public class UserRecord implements IDbRecord {
 	private String phone;
 	private String address;
 	private String company;
-	private String customerID;
+	private String customerBaseSet;
+	private String customerCacheSet;
 	private int    index;
-	private WritePolicy writePolicy = new WritePolicy();
-	private Policy policy = new Policy();
+	private DbOps dbOps;
+	private WritePolicy writePolicy;
+	private WritePolicy cacheWritePolicy;
+	private Policy policy;
 
 	/**
 	 * Generate a customer record based on the seed value.  This is used by
@@ -44,19 +47,25 @@ public class UserRecord implements IDbRecord {
 	 * @param console
 	 * @param seed
 	 */
-	public UserRecord(Console console, String custID, int seed) {
+	public UserRecord(Console console, DbOps dbOps, String baseSet, int seed) {
 
 		this.userID = String.format("UserName(%d)", seed);
 		this.email = String.format("Email(%d)", seed);
 		this.phone = String.format("Phone(%08d)", seed);
 		this.address = String.format("Address(%d)", seed);
 		this.company = String.format("Company(%d)", seed);
-		this.customerID = custID;
+		this.customerBaseSet = baseSet;
+		this.customerCacheSet = baseSet + ":cache";
 		this.index = seed; 
 		this.console = console;
+		this.dbOps = dbOps;
+		this.writePolicy = dbOps.writePolicy;
+		this.cacheWritePolicy = dbOps.cacheWritePolicy;
+		this.policy = dbOps.policy;
+				
 
-		console.debug("Creating Generated User Record(%d): CustID(%s) UserID(%s)",
-				seed, custID, userID);
+		console.debug("Generated User Record: Seed(%d): CustBase(%s) CustCache(%s) UserID(%s)",
+				seed, customerBaseSet, customerCacheSet, userID);
 	}
 
 	/**
@@ -82,7 +91,7 @@ public class UserRecord implements IDbRecord {
 		this.phone = phoneStr;
 		this.address = addressStr;
 		this.company = companyStr;
-		this.customerID = custID;
+		this.customerBaseSet = custID;
 		this.index = seed; 
 		this.console = console;
 
@@ -110,20 +119,20 @@ public class UserRecord implements IDbRecord {
 		this.phone = phone;
 		this.address = address;
 		this.company = company;
-		this.customerID = custID;
+		this.customerBaseSet = custID;
 		this.index = seed; 
 		this.console = console;
 	}
 
 	/**
-	 * Take this customer object and write it to the Set.
+	 * Take this User Record and write it to the Base Set.
 	 */
 	public int toStorage(AerospikeClient client, String namespace) throws Exception {
 		console.debug("Enter toStorage(): NS(%s)", namespace);
 		int result = 0;
 
 		// Set is the Customer ID, Record Key is the userID.
-		String setName = this.customerID;
+		String setName = this.customerBaseSet;
 		String recordKey = this.userID;
 
 		try {
@@ -131,7 +140,7 @@ public class UserRecord implements IDbRecord {
 			// Note that custID is BOTH the name of the Aerospike SET and it
 			// is the KEY of the Singleton Record for Customer info.
 			Key key        = new Key(namespace, setName, recordKey);
-			Bin custBin    = new Bin("custID", this.customerID);
+			Bin custBin    = new Bin("custID", this.customerBaseSet);
 			Bin nameBin    = new Bin("name", this.userID);
 			Bin emailBin = new Bin("email", this.email);
 			Bin phoneBin = new Bin("phone", this.phone);
@@ -156,6 +165,63 @@ public class UserRecord implements IDbRecord {
 
 		return result;
 	} // end toStorage()
+	
+	/**
+	 * If this User Record is not in the cache, then build a record and write
+	 * it into the cache, along with a CACHE TTL (the cache entries expire
+	 * regularly).
+	 */
+	public boolean updateCache(AerospikeClient client, String namespace) throws Exception {
+		console.debug("Enter toStorage(): NS(%s)", namespace);
+		boolean recordPresent = false;
+
+		// Set is the Customer ID, Record Key is the userID.
+		String cacheSetName = this.customerCacheSet;
+		String recordKey = this.userID;
+		Record record = null;
+
+		try {
+			Key key        = new Key(namespace, cacheSetName, recordKey);
+			
+			// First check to see if this record is present
+			record = client.get(this.policy, key);
+			if (record == null) {
+				// Record is not in the cache, build a new one (from the old
+				// information) and write it (with the CACHE TTL).
+				Bin custBin    = new Bin("custID", this.customerBaseSet);
+				Bin nameBin    = new Bin("name", this.userID);
+				Bin emailBin = new Bin("email", this.email);
+				Bin phoneBin = new Bin("phone", this.phone);
+				Bin addressBin = new Bin("address", this.address);
+				Bin companyBin = new Bin("company", this.company);
+				Bin indexBin = new Bin("index", this.index);
+
+				console.debug("Put: namespace(%s) set(%s) key(%s) custID(%s) userID(%s)",
+						key.namespace, key.setName, key.userKey, custBin.value, nameBin.value);
+
+				console.debug("Put: Email(%s) phone(%s) addr(%s) company(%s) index(%s)",
+						emailBin.value, phoneBin.value, addressBin.value, companyBin.value, indexBin.value);
+
+				// Write the Record
+				client.put(this.cacheWritePolicy, key, nameBin, emailBin, phoneBin,
+						addressBin, companyBin, indexBin );
+//				record = client.get(this.policy, key);
+//				console.info("JUST WROTE AND READ THIS RECORD: namespace(%s) set(%s) key(%s) In CACHE: Rec(%s)",
+//						key.namespace, key.setName, key.userKey, record.toString());
+				
+			} else {
+				console.debug("FOUND: namespace(%s) set(%s) key(%s) In CACHE: Rec(%s)",
+						key.namespace, key.setName, key.userKey, record.toString());
+				recordPresent = true;
+			}
+
+		} catch (Exception e){
+			e.printStackTrace();
+			console.warn("Exception: " + e);
+		}
+
+		return recordPresent;
+	} // end updateCache()
 
 	/**
 	 * Given a User object, read it from the set (using the key custID) and
@@ -172,7 +238,7 @@ public class UserRecord implements IDbRecord {
 		Record record = null;
 
 		// Set is the Customer ID, Record Key is the userID.
-		String setName = this.customerID;
+		String setName = this.customerBaseSet;
 		String recordKey = this.userID;
 
 		try {
@@ -207,21 +273,18 @@ public class UserRecord implements IDbRecord {
 	 * 
 	 * @param client
 	 * @param nameSpace
+	 * @param setName
 	 * @return
 	 * @throws Exception
 	 */
-	public Record  remove(AerospikeClient client, String namespace) 
+	public Record  remove(AerospikeClient client, String namespace, String setName) 
 			throws Exception 
 	{
 		Record record = null;
-
-		// A slightly strange case where the customerID is BOTH the set name
-		// and the Key for the customer record.
-		String setName = this.customerID;
 		String recordKey = this.userID;
 
 		try {
-			Key key        = new Key(namespace, setName, recordKey);
+			Key key = new Key(namespace, setName, recordKey);
 
 			// Remove the record
 			console.debug("Remove Record: namespace(%s) set(%s) key(%s)",
@@ -247,7 +310,7 @@ public class UserRecord implements IDbRecord {
 		sb.append(String.format("Phone(%s)", phone));
 		sb.append(String.format("Address(%s)", address));
 		sb.append(String.format("Company(%s)", company));
-		sb.append(String.format("CustomerID(%s)", customerID));
+		sb.append(String.format("CustomerID(%s)", customerBaseSet));
 		sb.append(String.format("Index(%d)",  index));
 
 		return sb.toString();
@@ -294,11 +357,19 @@ public class UserRecord implements IDbRecord {
 	}
 
 	public String getCustomerID() {
-		return customerID;
+		return customerBaseSet;
+	}
+	
+	public String getCustomerBaseSet() {
+		return customerBaseSet;
+	}
+	
+	public String getCustomerCacheSet() {
+		return customerCacheSet;
 	}
 
 	public void setCustomerID(String customerID) {
-		this.customerID = customerID;
+		this.customerBaseSet = customerID;
 	}
 
 	public int getIndex() {

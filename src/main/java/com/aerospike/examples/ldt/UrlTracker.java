@@ -2,7 +2,13 @@ package com.aerospike.examples.ldt;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -12,6 +18,9 @@ import org.apache.commons.cli.PosixParser;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
+import com.aerospike.client.Key;
+import com.aerospike.client.Value;
+import com.aerospike.client.policy.Policy;
 
 /**
  * UrlTracker application to show Aerospike Data Manipulation for an application
@@ -87,6 +96,9 @@ public class UrlTracker implements IAppConstants {
 	private int port;    // The port of the host node
 	private String namespace; // The Namespace that will hold the data
 	
+	private String baseNamespace; // The Base Namespace for long-term data
+	private String cacheNamespace; // The Cache Namespace for the short-term data
+	
 	private DbOps dbOps; // Interact with Aerospike Operations
 	private DbParameters parms; // The "bundled" object holding DB values.
 	
@@ -114,6 +126,8 @@ public class UrlTracker implements IAppConstants {
 	private long timeToLive; // The minimum length of time for a site obj to live.
 	
 	private boolean noCleanThreads; // If true, do not invoke Clean Threads.
+	
+	private int emulationDays; // When non-zero, number of days to run a simulation;
 
 	protected Console console; // Easy IO for tracing/debugging
 	private TestTiming testTiming;
@@ -122,10 +136,13 @@ public class UrlTracker implements IAppConstants {
 
 	/**
 	 * Constructor for URL Tracker EXAMPLE class.
+	 * 
 	 * @param console
 	 * @param host
 	 * @param port
 	 * @param namespace
+	 * @param baseNamespace
+	 * @param cacheNamespace
 	 * @param fileName
 	 * @param ldtType
 	 * @param clean
@@ -142,20 +159,25 @@ public class UrlTracker implements IAppConstants {
 	 * @param loadOnly
 	 * @param noCleanThreads
 	 * @param doScan
+	 * @param emulationDays
 	 * @throws AerospikeException
 	 */
 	public UrlTracker(Console console, String host, int port, String namespace, 
+			String baseNamespace, String cacheNamespace,
 			String fileName, String ldtType, boolean clean, boolean remove, 
 			long customers, long records, long generateCount, int threadCount,
 			int cleanIntervalSec, long cleanDurationSec, int cleanMethod,
 			long timeToLive,  boolean noLoad, boolean loadOnly, 
-			boolean noCleanThreads, boolean doScan
+			boolean noCleanThreads, boolean doScan, int emulationDays
 			)  	throws AerospikeException 
 	{
 		this.host = host;
 		this.port = port;
 		this.namespace = namespace;
-		this.parms = new DbParameters(host, port, namespace);
+		this.baseNamespace = baseNamespace;
+		this.cacheNamespace = cacheNamespace;
+		this.parms = new DbParameters(host, port, 
+				namespace, baseNamespace, cacheNamespace);
 		
 		this.dbOps = new DbOps(console, parms, ldtType);
 		
@@ -183,6 +205,7 @@ public class UrlTracker implements IAppConstants {
 		this.doScan = doScan;
 		
 		this.noCleanThreads = noCleanThreads;
+		this.emulationDays = emulationDays;
 		
 		this.testTiming = new TestTiming();
 	} // end UrlTracker constructor
@@ -198,27 +221,35 @@ public class UrlTracker implements IAppConstants {
 		try {
 			// Our "DbParmeters" object holds all of the Aerospike Server
 			// values (host, port, namespace) in a single object.
-			DbParameters parms = new DbParameters(host, port, namespace);
+			DbParameters parms =  new DbParameters(host, port, 
+							namespace, baseNamespace, cacheNamespace);
 
 			ProcessCommands pc = new ProcessCommands(console, parms, 
 					ldtType, dbOps, timeToLive, testTiming);
 
-			if (generateCount > 0){
+			if (generateCount > 0 || emulationDays > 0){
 				// We are using the command generator to drive this application
 				if ( cleanBefore && !noLoad ) {
 					testTiming.setStartTime( AppPhases.CLEAN);
-					pc.cleanDB(customerRecords, userRecords);
+					pc.cleanDB(customerRecords, userRecords, emulationDays);
 					testTiming.setEndTime( AppPhases.CLEAN);
 				}
-				
-				pc.generateCommands(threadCount, customerRecords,
-						userRecords, generateCount, cleanIntervalSec, 
-						cleanDurationSec, cleanMethod, noLoad, loadOnly, 
-						noCleanThreads, doScan );
-				
+
+				if (emulationDays > 0) {
+					pc.emulateCustomer(threadCount, customerRecords, userRecords, 
+							noLoad, emulationDays, noCleanThreads, cleanMethod);
+
+				} else {
+
+					pc.generateCommands(threadCount, customerRecords,
+							userRecords, generateCount, cleanIntervalSec, 
+							cleanDurationSec, cleanMethod, noLoad, loadOnly, 
+							noCleanThreads, doScan );
+				}
+
 				if ( cleanAfter && !loadOnly ) {
 					testTiming.setStartTime( AppPhases.REMOVE);
-					pc.cleanDB(customerRecords, userRecords);
+					pc.cleanDB(customerRecords, userRecords, emulationDays);
 					testTiming.setEndTime( AppPhases.REMOVE);
 				}
 			} else {
@@ -234,10 +265,8 @@ public class UrlTracker implements IAppConstants {
 		testTiming.setFinish();
 		testTiming.printStats();
 		
-
 	} // end runUrlTracker()
 	
-
 	/**
 	 * Main Function for URL Tracker.  Get the options from the user and
 	 * launch the URL Tracker application.
@@ -263,7 +292,7 @@ public class UrlTracker implements IAppConstants {
 			options.addOption("r", "records", true, "Generated number of Users per customer (default: 20)");
 			options.addOption("v", "visits", true, "Average number of SiteVisits per UserRecord (default: 1000)");
 			
-			options.addOption("T", "Threads", true, "Number of threads to use in Generate Mode (default: 1)");
+			options.addOption("T", "Threads", true, "Number of threads to use in Generate Mode (default: 10)");
 			options.addOption("L", "TimeToLive", true, "Number of seconds for a Site Visit Object to live (default: 600)");
 			
 			options.addOption("I", "CleanInterval", true, "Time to sleep in seconds between cleaning (default: 1200 sec)");
@@ -278,6 +307,10 @@ public class UrlTracker implements IAppConstants {
 			options.addOption("O", "LoadOnly", false, "Load the Data, but do NOT update SiteVisits or Clean");
 			
 			options.addOption("S", "DoScan", false, "Scan the LDTs after the Update Phase");
+			
+			options.addOption("E", "Emulate", true, "Emulate Customer Activity for N days (default N=0)");
+			options.addOption("1", "BaseNameSpace", true, "Namespace to use for Base Records (default: 'base')");
+			options.addOption("2", "CacheNameSpace", true, "Namespace to use for Cache Records (default: 'cache')");
 
 			CommandLineParser parser = new PosixParser();
 			CommandLine cl = parser.parse(options, args, false);
@@ -301,7 +334,7 @@ public class UrlTracker implements IAppConstants {
 			String visitString = cl.getOptionValue("v", "1000");
 			long aveVisits = Long.parseLong(visitString);	
 			
-			String threadString = cl.getOptionValue("T", "1");
+			String threadString = cl.getOptionValue("T", "10");
 			int threadCount  = Integer.parseInt(threadString);
 			
 			String cleanString = cl.getOptionValue("C", "1");
@@ -329,6 +362,15 @@ public class UrlTracker implements IAppConstants {
 			// 2: Use the UDF Code (call UDF Scan to perform expire on the server)
 			String cleanMethodString = cl.getOptionValue("M", "2");
 			int cleanMethod = Integer.parseInt(cleanMethodString);
+			
+			// Number of Days to do a Customer Emulation
+			String emulationString = cl.getOptionValue("E", "0");
+			int emulationDays = Integer.parseInt(emulationString);
+			
+			// Base NameSpace when in Emulation Mode
+			String baseNamespace = cl.getOptionValue("1", "base");
+			// Cache NameSpace when in Emulation Mode
+			String cacheNamespace = cl.getOptionValue("2", "cache");
 			
 			@SuppressWarnings("unchecked")
 			List<String> cmds = cl.getArgList();
@@ -370,6 +412,8 @@ public class UrlTracker implements IAppConstants {
 			console.info("Host: " + host);
 			console.info("Port: " + port);
 			console.info("Namespace: " + namespace);
+			console.info("Emulation BaseNamespace: " + baseNamespace);
+			console.info("Emulation CacheNamespace: " + cacheNamespace);	
 			console.info("Set: " + set);
 			console.info("Input Command FileName: " + fileName);
 			console.info("Generate Count: " + generateCount );
@@ -389,6 +433,7 @@ public class UrlTracker implements IAppConstants {
 			console.info("No Load: " + noLoad);
 			console.info("Load Only: " + loadOnly);
 			console.info("No Clean Threads: " + noCleanThreads);
+			console.info("Emulation Days: " + emulationDays);
 			
 			// Validate the LDT implementation that we're going to use
 			if (LLIST.equalsIgnoreCase(ldtType) ||  
@@ -400,12 +445,13 @@ public class UrlTracker implements IAppConstants {
 				console.error("Cannot continue.");
 				return;
 			}
-			
+						
 			UrlTracker urlTracker = new UrlTracker(console, host, port, namespace, 
+					baseNamespace, cacheNamespace,
 					fileName, ldtType, clean, remove, customers, records, 
 					generateCount, threadCount, intervalSeconds, durationSeconds, 
 					cleanMethod, timeToLive, noLoad, loadOnly, noCleanThreads,
-					doScan);
+					doScan, emulationDays);
 			// Run the main application with the given parameters.
 			urlTracker.runUrlTracker();
 

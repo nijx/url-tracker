@@ -44,8 +44,9 @@ public class DbOps implements IAppConstants {
 	String ldtType;
 	String ldtBinName = LDT_BIN;
 
-	private WritePolicy writePolicy;
-	private Policy policy;
+	public WritePolicy writePolicy;
+	public WritePolicy cacheWritePolicy;
+	public Policy policy;
 
 	protected Console console;
 
@@ -82,10 +83,20 @@ public class DbOps implements IAppConstants {
 			e.printStackTrace();
 		}
 		
+		// Notice the high Timeout value -- which may be needed if the scan
+		// size (for cache rec reload) is particularly large.
 		this.writePolicy = new WritePolicy();
-		this.writePolicy.timeout = 1000;
+		this.writePolicy.timeout = 2000;
 		this.writePolicy.maxRetries = 0;
+		
+		// Note:  We are relying on the NAMESPACE TTL for Cache Records so
+		// we no longer rely on record TTL here.   
+		this.cacheWritePolicy = new WritePolicy();
+		this.cacheWritePolicy.timeout = 2000;
+		this.cacheWritePolicy.maxRetries = 0;
+		
 		this.policy = new Policy();
+		this.policy.timeout = 2000;
 		
 		this.console = console;
 	}

@@ -16,18 +16,20 @@
  */
 package com.aerospike.examples.ldt;
 
+import java.util.List;
 import java.util.Map;
 
 import org.json.simple.JSONObject;
 
 import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.policy.Policy;
-import com.aerospike.client.policy.WritePolicy;
+import com.aerospike.client.AerospikeException;
+import com.aerospike.client.Key;
 
 public class SiteVisitEntry {
 
 	private Console console;
-	private String custID; // The Set Name
+	private String customerBaseSet; // The Set Name
+	private String customerCacheSet;
 	private String userID; // The User Record
 	private String url;
 	private String referrer;
@@ -37,13 +39,15 @@ public class SiteVisitEntry {
 	private long timeToLive;
 	private int    index;
 	private String ldtBinName;
-	private WritePolicy writePolicy = new WritePolicy();
-	private Policy policy = new Policy();
+//	private WritePolicy writePolicy = new WritePolicy();
+//	private Policy policy = new Policy();
+	
+	static final String CLASSNAME = "SiteVisitEntry";
 	
 	/**
 	 * Generate a customer record based on the seed value. 
 	 * @param console
-	 * @param custID
+	 * @param customerBaseSet
 	 * @param userID
 	 * @param seed
 	 * @param ldtBinName
@@ -53,7 +57,8 @@ public class SiteVisitEntry {
 			int seed, String ldtBinName, long timeToLive) 
 	{
 		this.console = console;
-		this.custID = custID;
+		this.customerBaseSet = custID;
+		this.customerCacheSet = custID + ":cache";
 		this.userID = userID;
 		
 		this.url = String.format("url(%d)", seed);
@@ -79,7 +84,8 @@ public class SiteVisitEntry {
 	public SiteVisitEntry(Console console, JSONObject commandObj, 
 			String namespace, int seed, String ldtBinName) 
 	{
-		console.debug("Enter SiteVisitEntry");
+		final String meth = "SiteVisitEntry";
+		console.debug("Enter<%s:%s> ", CLASSNAME, meth);
 		
 		try {
 		
@@ -98,7 +104,8 @@ public class SiteVisitEntry {
 		Long expireLong = (Long) siteObj.get("expire");
 
 		this.userID = nameStr;
-		this.custID = custStr;
+		this.customerBaseSet = custStr;
+		this.customerCacheSet = custStr + ":cache";
 		
 		this.url = urlStr;
 		this.referrer = referrerStr;
@@ -114,7 +121,8 @@ public class SiteVisitEntry {
 		this.console = console;
 		} catch (Exception e) {
 			e.printStackTrace();
-			console.error("Error Building Site Visit Entry");
+			console.error("<%s:%s> Error Building Site Visit Entry",
+					CLASSNAME, meth);
 		}
 	}
 	
@@ -128,12 +136,14 @@ public class SiteVisitEntry {
 	 * @param index
 	 */
 	public SiteVisitEntry(Console console, String namespace, String custID, 
+			String customerBaseNS, String customerSegNS,
 			String userID, String referrer, String pageTitle, Long date, 
 			Long expire, int seed, String ldtBinName)
 	{
 		this.console = console;	
 		
-		this.custID = custID;
+		this.customerBaseSet = custID;
+		this.customerCacheSet = custID + ":cache";
 		this.userID = userID;
 		
 		this.referrer = referrer;
@@ -158,6 +168,7 @@ public class SiteVisitEntry {
 	
 	/**
 	 * Take this Site Visit object and write it to the LDT for the user.
+	 * This method is used for both the Base Storage and the Cache Storage
 	 * The chosen LDT is passed in (LLIST or LMAP).
 	 * 
 	 * @param client
@@ -165,10 +176,11 @@ public class SiteVisitEntry {
 	 * @return
 	 * @throws Exception
 	 */
-	public int toStorage(AerospikeClient client, String namespace,
-			ILdtOperations ldtOps) 
+	public int toStorage(AerospikeClient client, String namespace, 
+			String set, ILdtOperations ldtOps) 
 			throws Exception 
 	{
+		final String meth = "toStorage()";
 		int result = 0;
 		int retryCount = 5;
 		
@@ -180,7 +192,7 @@ public class SiteVisitEntry {
 			int i = 0;
 			for (i = 0; i < retryCount; i++){
 				// Store the Map Object in the appropriate LDT
-				result = ldtOps.storeSiteObject(this, namespace, siteObjMap);
+				result = ldtOps.storeSiteObject(this, namespace, set, siteObjMap);
 				if (result == 0){
 					break;
 				} else if (result == -2) {
@@ -190,72 +202,117 @@ public class SiteVisitEntry {
 					this.refreshSiteVisitEntry();
 					 siteObjMap = ldtOps.newSiteObject(this);
 				} else {
-					console.error("General Error on Site Visit Store");
+					console.error("<%s:%s> General Error on Site Visit Store",
+							CLASSNAME, meth);
 					break;
 				}
 			}
 			if (result != 0) {
-				console.error("Failure Storing Object: ErrResult(%d) Retries(%d)",
-						result, i);
+				console.error("<%s:%s> Failure Storing Object: ErrResult(%d) Retries(%d)",
+						CLASSNAME, meth, result, i);
 			}
 
 		} catch (Exception e){
 			e.printStackTrace();
-			console.error("Exception: " + e);
+			console.error("<%s:%s> Exception(%s)", CLASSNAME, meth, e.toString());
 		}
 
 		return result;
 	}
 
-//	/**
-//	 * Given a User object, read it from the set (using the key custID) and
-//	 * validate it with the manufactured object.
-//	 * 
-//	 * @param client
-//	 * @param nameSpace
-//	 * @return
-//	 * @throws Exception
-//	 */
-//	public SiteVisitEntry fromStorage(AerospikeClient client, 
-//			String namespace, ILdtOperations ldtOps) 
-//			throws Exception 
-//	{
-//		SiteVisitEntry result = this;
-//
-//		// Set is the Customer ID, Record Key is the userID.
-//		String setName = this.custID;
-//		String recordKey = this.userID;
-//		
-//		try {
-//
-//			// Get the User Record for a given UserId and CustID
-//			Key key = new Key(namespace, setName, recordKey);
-//			console.debug("Get: namespace(%s) set(%s) key(%s)",
-//					key.namespace, key.setName, key.userKey);
-//
-//			// Read the record and validate.
-//			Record record = client.get(this.policy, key);
-//			if (record == null) {
-//				throw new Exception(String.format(
-//						"Failed to get: namespace=%s set=%s key=%s", 
-//						key.namespace, key.setName, key.userKey));
-//			}
-//			
-//			console.debug("Record Result:" + record );
-//			
-//
-//		} catch (Exception e){
-//			e.printStackTrace();
-//			console.warn("Exception: " + e);
-//		}
-//		
-//		return result;
-//	}
+	/**
+	 * Given a User object, Scan the LDT from the Base Set and use that data
+	 * to load up the LDT in the Cache Set.
+	 * 
+	 * Use this opportunity to compare the Size with the Scan amount to verify
+	 * that our data and LDT statistics are in sync.
+	 * 
+	 * @param client
+	 * @param nameSpace
+	 * @return
+	 * @throws Exception
+	 */
+	public SiteVisitEntry reloadCache(AerospikeClient client, 
+			String baseNamespace, String cacheNamespace, ILdtOperations ldtOps) 
+			throws Exception 
+	{
+		
+		final String meth = "reloadCache()";
+		SiteVisitEntry result = this;
+
+		// Set is the Customer ID, Record Key is the userID.
+		String baseSetName = this.customerBaseSet;
+		String cacheSetName = this.customerCacheSet;
+		String recordKeyString = this.userID;
+
+		int writeResult = 0;
+		int sizeCheck = 0;
+		int scanSize = 0;
+		
+		try {
+
+			// First, we check the Segmented Cache for the UserRecord.
+			// If it is not there, we will create it from the generated object
+			// and the LDT info from the base customer set.
+
+			// Get the User Record for a given UserId and CustID from the
+			// Segmented Cache.
+			Key baseKey = new Key(baseNamespace, baseSetName, recordKeyString);
+			Key cacheKey = new Key(cacheNamespace, cacheSetName, recordKeyString);
+			
+			console.info("CCCCCCCCCCCCCCCCCCC Reload Cache LDT CCCCCCCCCCCCCCCCCCCCCCC");
+			console.info("Base LDT: namespace(%s) set(%s) key(%s)",
+					baseKey.namespace, baseKey.setName, baseKey.userKey);
+			console.info("Cache LDT: namespace=%s set=%s key=%s", 
+					cacheKey.namespace, cacheKey.setName, cacheKey.userKey);
+			
+			try {
+				sizeCheck = ldtOps.ldtSize(baseKey, ldtBinName);
+			} catch (AerospikeException ae) {
+				console.info("<%s:%s> Error calling size(); on LDT",
+						CLASSNAME, meth);
+				console.error("Aerospike Error Code(%d) Error Message(%s)",
+						ae.getResultCode(), ae.getMessage());
+				sizeCheck = 0;
+			} catch (Exception e) {
+				// Do Nothing. keep on truckin.
+				console.info("<%s:%s> General Error calling size(); on LDT",
+						CLASSNAME, meth);
+				sizeCheck = 0;
+			}
+			if (sizeCheck > 0) {
+				List<Map<String,Object>> fullLdtList = ldtOps.scanLDT(baseKey);
+				if (fullLdtList != null) {
+					scanSize = fullLdtList.size();
+				}
+				// Validate the size.
+				if (sizeCheck != scanSize) {
+					console.error("<%s:%s> << SIZE MISMATCH: LDT Size(%d); Scan Size(%d) >>",
+							CLASSNAME, meth, sizeCheck, scanSize);
+				} else {
+					console.info("<%s:%s> : LDT Size(%d); Scan Size(%d) >>",
+							CLASSNAME, meth, sizeCheck, scanSize);
+				}
+
+				writeResult = ldtOps.loadFullLDT(this, cacheKey, fullLdtList);
+				if (writeResult != 0){
+					console.error("<%s:%s> Write Problem Loading LDT: RC(%d) namespace=%s set=%s key=%s", 
+						CLASSNAME, meth, writeResult, 
+						cacheKey.namespace, cacheKey.setName, cacheKey.userKey);
+				}
+			}
+		} catch (Exception e){
+			e.printStackTrace();
+			console.error("<%s:%s> Exception(%s)", CLASSNAME, meth, e.toString());
+		}
+		
+		return result;
+	}
 	
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format("UserID(%s)", userID));
-		sb.append(String.format("CustID(%s)", custID));
+		sb.append(String.format("CustID(%s)", customerBaseSet));
 		sb.append(String.format("URL(%s)", url));
 		sb.append(String.format("Referrer(%s)", referrer));
 		sb.append(String.format("PageTitle(%s)", pageTitle));
@@ -266,14 +323,6 @@ public class SiteVisitEntry {
 		return sb.toString();
 	}
 	
-
-	public String getCustID() {
-		return custID;
-	}
-
-	public void setCustID(String custID) {
-		this.custID = custID;
-	}
 
 	public String getUserID() {
 		return userID;
@@ -331,21 +380,21 @@ public class SiteVisitEntry {
 		this.index = index;
 	}
 
-	public WritePolicy getWritePolicy() {
-		return writePolicy;
-	}
-
-	public void setWritePolicy(WritePolicy writePolicy) {
-		this.writePolicy = writePolicy;
-	}
-
-	public Policy getPolicy() {
-		return policy;
-	}
-
-	public void setPolicy(Policy policy) {
-		this.policy = policy;
-	}
+//	public WritePolicy getWritePolicy() {
+//		return writePolicy;
+//	}
+//
+//	public void setWritePolicy(WritePolicy writePolicy) {
+//		this.writePolicy = writePolicy;
+//	}
+//
+//	public Policy getPolicy() {
+//		return policy;
+//	}
+//
+//	public void setPolicy(Policy policy) {
+//		this.policy = policy;
+//	}
 
 	public String getLdtBinName() {
 		return ldtBinName;
@@ -354,8 +403,21 @@ public class SiteVisitEntry {
 	public void setLdtBinName(String ldtBinName) {
 		this.ldtBinName = ldtBinName;
 	}
-	
-	
-	
+
+	public String getCustomerBaseSet() {
+		return customerBaseSet;
+	}
+
+	public void setCustomerBaseSet(String customerBaseSet) {
+		this.customerBaseSet = customerBaseSet;
+	}
+
+	public String getCustomerCacheSet() {
+		return customerCacheSet;
+	}
+
+	public void setCustomerCacheSet(String customerCacheSet) {
+		this.customerCacheSet = customerCacheSet;
+	}
 	
 }

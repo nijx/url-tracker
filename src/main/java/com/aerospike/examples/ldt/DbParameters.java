@@ -27,14 +27,19 @@ public class DbParameters {
 	public String host;
 	public int port;
 	public String namespace;
+	public String baseNamespace;
+	public String cacheNamespace;
 	public String set;
 	public WritePolicy writePolicy;
 	public Policy policy;
 	
-	protected DbParameters(String host, int port, String namespace) {
+	protected DbParameters(String host, int port, 
+			String namespace, String baseNamespace, String cacheNamespace) {
 		this.host = host;
 		this.port = port;
 		this.namespace = namespace;
+		this.baseNamespace = baseNamespace;
+		this.cacheNamespace = cacheNamespace;
 		this.writePolicy = new WritePolicy();
 		this.writePolicy.timeout = 1000;
 		this.writePolicy.maxRetries = 0;
@@ -46,6 +51,8 @@ public class DbParameters {
 		return "Parameters: host=" + host + 
 				" port=" + port + 
 				" ns=" + namespace + 
+				" bns=" + baseNamespace +
+				" cns=" + cacheNamespace +
 				" set=variable";
 	}
 
@@ -88,6 +95,24 @@ public class DbParameters {
 	public void setPolicy(Policy policy) {
 		this.policy = policy;
 	}
+
+	public String getBaseNamespace() {
+		return baseNamespace;
+	}
+
+	public void setBaseNamespace(String baseNamespace) {
+		this.baseNamespace = baseNamespace;
+	}
+
+	public String getCacheNamespace() {
+		return cacheNamespace;
+	}
+
+	public void setCacheNamespace(String cacheNamespace) {
+		this.cacheNamespace = cacheNamespace;
+	}
+	
+	
 
 
 }

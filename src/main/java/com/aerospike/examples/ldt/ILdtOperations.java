@@ -15,6 +15,15 @@ import com.aerospike.client.Key;
 
 public interface ILdtOperations {
 	
+	public static final String URL_FILLER =
+			"http://www.url.com/_1234567890123456789012345678901234567890" +
+			"123456789012345678901234567890123456789012345678901234567890";
+	
+	public static final String MISC_FILLER =
+			"Miscellaneous_______1234567890123456789012345678901234567890" +
+			"123456789012345678901234567890123456789012345678901234567890" +
+			"123456789012345678901234567890123456789012345678901234567890";
+	
 	/**
 	 * Initialize any necessary structures before regular command processing.
 	 */
@@ -27,13 +36,43 @@ public interface ILdtOperations {
 	 */
 	public Map<String,Object> newSiteObject(SiteVisitEntry entry);
 	
+	
 	/**
-	 * Store a Site Object into the LDT.
+	 * Return the size of the LDT in this record, in this bin.
+	 * @param key
+	 * @param bin
+	 * @return
+	 */
+	public int  ldtSize(Key key, String bin);
+	
+	/**
+	 * Store a Site Object into the LDT -- in the Base Customer Set.
 	 * @param sve
 	 * @param siteObjMap
 	 */
-	public int storeSiteObject(SiteVisitEntry sve, String ns,
+	public int storeSiteObject(SiteVisitEntry sve, String ns, String set,
 			Map<String,Object> siteObjMap);
+	
+//	/**
+//	 * Store a Site Object into the LDT -- in the Cache Customer Set.
+//	 * @param sve
+//	 * @param namespace
+//	 * @param siteObjMap
+//	 * @return
+//	 */
+//	public int storeCachedSiteObject(SiteVisitEntry sve, String namespace,
+//			Map<String,Object> siteObjMap  );
+	
+	
+	/**
+	 * Load up an entire LDT in the Segmented Cache with a Multi-Write.
+	 * @param sve
+	 * @param namespace
+	 * @param fullLDT
+	 * @return
+	 */
+	public int loadFullLDT(SiteVisitEntry sve, Key key,
+			List<Map<String,Object>> fullLdtList  );
 
 	/**
 	 * Scan the user's Site Visit List, and return a list of MAP objects.
@@ -61,7 +100,6 @@ public interface ILdtOperations {
 	 * @param key
 	 * @return
 	 */
-	public abstract List<Map<String,Object>> scanLDT( String ns,
-			String set, Key key) throws AerospikeException;
+	public abstract List<Map<String,Object>> scanLDT( Key key) throws AerospikeException;
 
 } // end interface ILdtOperations

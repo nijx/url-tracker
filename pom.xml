@@ -14,7 +14,7 @@
 		<dependency>
 			<groupId>com.aerospike</groupId>
 			<artifactId>aerospike-client</artifactId>
-			<version>3.0.27</version>
+			<version>3.0.30</version>
 		</dependency>
 		<!-- Apache command line parser. -->
 		<dependency>

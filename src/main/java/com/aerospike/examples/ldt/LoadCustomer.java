@@ -37,8 +37,9 @@ public class LoadCustomer implements Runnable, IAppConstants {
 	private long customerNumber;
 	private String namespace;
 	private long userRecords;
+	private DbOps dbOps;
 
-	public LoadCustomer(Console console, AerospikeClient client,
+	public LoadCustomer(Console console, AerospikeClient client, DbOps dbOps,
 			String namespace, long customerNumber, long userRecords ) 
 	{
 		this.console = console;
@@ -47,6 +48,7 @@ public class LoadCustomer implements Runnable, IAppConstants {
 		this.namespace = namespace;
 		this.userRecords = userRecords;
 		this.client = client;
+		this.dbOps = dbOps;
 	}
 
 	/**
@@ -71,7 +73,7 @@ public class LoadCustomer implements Runnable, IAppConstants {
 			customerSet = custRec.getCustomerID();
 
 			for (j = 0; j < userRecords; j++) {
-				userRec = new UserRecord(console, customerSet, j);
+				userRec = new UserRecord(console, dbOps, customerSet, j);
 				userRec.toStorage(client, namespace);
 			} // end for each user record	
 		} catch (Exception e) {

@@ -99,22 +99,17 @@ public class UserTraffic implements Runnable, IAppConstants {
 			// Also -- we will invoke multiple instances of the client, each
 			// in a thread,  to increase the traffic to the DB cluster (and thus
 			// giving it more exercise).
-			//
-			// New addition:  If our user has specified more than one thread,
-			// then we'll fire off multiple threads
-
-			
 			console.info("Done with Load.  Starting Site Visit Generation.");
 			for (i = 0; i < generateCount; i++) {
 				customerSeed = random.nextInt(this.customerMax);
 				custRec = new CustomerRecord(console, customerSeed);
 				
 				userSeed = random.nextInt(this.userMax);
-				userRec = new UserRecord(console, custRec.getCustomerID(), (int) userSeed);
+				userRec = new UserRecord(console, dbOps, custRec.getCustomerID(), (int) userSeed);
 				
 				sve = new SiteVisitEntry(console, custRec.getCustomerID(), 
 						userRec.getUserID(), i, LDT_BIN, this.timeToLive);
-				sve.toStorage(client, namespace, ldtOps);
+				sve.toStorage(client, namespace, userRec.getCustomerBaseSet(), ldtOps);
 				
 				set = custRec.getCustomerID();
 				keyStr = userRec.getUserID();
@@ -135,7 +130,8 @@ public class UserTraffic implements Runnable, IAppConstants {
 			
 		} catch (Exception e) {
 			e.printStackTrace();
-			console.error("Problem with Thread(%d) Customer Record: Seed(%d)", i);
+			console.error("Problem with Thread(%d) Customer Record: Seed(%d)", 
+					i, userSeed);
 		}
 
 	} // end run()

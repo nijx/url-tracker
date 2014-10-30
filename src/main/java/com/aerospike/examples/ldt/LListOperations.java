@@ -21,10 +21,11 @@ import com.aerospike.client.policy.WritePolicy;
 */
 public class LListOperations implements ILdtOperations, IAppConstants {
 	private AerospikeClient client;
-	private WritePolicy writePolicy;
-	private Policy policy;
+	private Policy ldtPolicy;
 
 	protected Console console;
+	
+	static final String CLASSNAME = "LListOperations";
 
 	/**
 	 * Constructor for LLIST OPERATION class.
@@ -38,17 +39,38 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 			throws AerospikeException 
 	{
 
-		this.client = client;
-		this.writePolicy = new WritePolicy();
-		this.writePolicy.timeout = 1000;
-		this.writePolicy.maxRetries = 0;
-		this.policy = new Policy();
+		this.client = client;		
+		this.ldtPolicy = new Policy();
 		this.console = console;
 	}
 	
 	public void setup() {
 		// Nothing needed for LLIST (yet).
 		// Eventually, we will register needed UDFs here.
+	}
+	
+	/**
+	 * Return the size of the LDT in this record.
+	 * @param namespace
+	 * @param set
+	 * @param key
+	 * @param bin
+	 * @return
+	 */
+	public int  ldtSize(Key key, String bin) {	
+		int ldtSize = 0;
+		try {		
+			// Initialize Large LIST operator.
+			com.aerospike.client.large.LargeList llist = 
+					client.getLargeList(this.ldtPolicy, key, bin, CM_LLIST_MOD);
+
+			// Get the size.
+			ldtSize = llist.size();
+		} catch (Exception e){
+			e.printStackTrace();
+			System.out.println("Store Site Visit Exception: " + e);
+		}
+		return(ldtSize);	
 	}
 	
 	/**
@@ -65,39 +87,52 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 		HashMap<String,Object> siteObjMap = new HashMap<String,Object>();
 		siteObjMap.put("key", entry.getExpire());
 		siteObjMap.put("name", entry.getUserID());
-		siteObjMap.put("URL", entry.getUrl());
+		siteObjMap.put("URL", entry.getUrl() + URL_FILLER);
+		siteObjMap.put("MISC1", MISC_FILLER);
+		siteObjMap.put("MISC2", MISC_FILLER);
+		siteObjMap.put("MISC3", MISC_FILLER);
+		siteObjMap.put("MISC4", MISC_FILLER);
 		siteObjMap.put("referrer", entry.getReferrer());
 		siteObjMap.put("page_title", entry.getPageTitle());
 		siteObjMap.put("date", entry.getDate());
 		
 		return siteObjMap;	
 	}
-	
+
+
 	/**
 	 * Enter a new Site Visit object in the collection of site visits for
-	 * a particular user.  Order the Site Visit Objects by Expire Time.
-	 * @param commandObj
-	 * @param params
-	 * @return the status:  zero ok, -1 Gen error, -2 Duplicate Key (retry)
+	 * a particular user.  Manage the Site Visit Objects by Expire Time.
+	 * @param sve: the SiteVisitEntry to store
+	 * @param namespace: the aerospike namespace
+	 * @param set: The Aerospike Set to use (base or cache)
+	 * @param siteObjMap: The physical object to store
+	 * @return the status:  
+	 *   zero ok, 
+	 *   -1 Gen error, 
+	 *   -2 Duplicate Key (retry)
+	 *   -3 Other Aerospike Error
 	 */
 	public int storeSiteObject(SiteVisitEntry sve, String namespace,
-			Map<String,Object> siteObjMap  ) 
+			String set, Map<String,Object> siteObjMap  ) 
 	{
-		console.debug("ENTER storeObject:");
+		final String meth = "storeObject()";
+		console.debug("ENTER LLIST StoreSiteObject("+sve.toString()+") MapObj("+siteObjMap.toString()+")");
+		
+		console.debug("ENTER<%s:%s> NS(%s) Set(%s)", CLASSNAME, meth, namespace, set);
 		
 		// The Customer ID (custID) is the Aerospike SET name, and userID is the
 		// key for the record (the user data and the site visit list).
 		String userID = sve.getUserID();
-		String custID = sve.getCustID();
 
 		try {		
 
-			Key userKey = new Key(namespace, custID, userID);
+			Key userKey = new Key(namespace, set, userID);
 			String siteListBin = sve.getLdtBinName();
 
 			// Initialize Large LIST operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, userKey, siteListBin, 
+					client.getLargeList(this.ldtPolicy, userKey, siteListBin, 
 							CM_LLIST_MOD);
 
 			// Package up the Map Object and add it to the LLIST.  Note that the
@@ -105,7 +140,57 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 			llist.add(Value.getAsMap(siteObjMap));
 
 		} catch (AerospikeException ae) {
-			console.debug("DB Error:  Retry");
+			if (ae.getResultCode() == AS_ERR_UNIQUE) {
+				// In this case, we want to retry (and not complain)
+				return( -2 );
+			} else {
+				console.error("<%s:%s>Aerospike Error Code(%d) Error Message(%s)",
+					CLASSNAME, meth, ae.getResultCode(), ae.getMessage());
+				return( -3 );
+			}
+		} catch (Exception e){
+			e.printStackTrace();
+			System.out.println("Store Site Visit Exception: " + e);
+			return( -1 );
+		}
+		return(0);
+	} // end storeSiteObject()
+	
+
+	/**
+	 * Load up an entire LDT in the Segmented Cache with a Multi-Write.
+	 * @param sve
+	 * @param namespace
+	 * @param fullLDT
+	 * @return
+	 */
+	public int loadFullLDT(SiteVisitEntry sve, Key key,
+			List<Map<String,Object>> fullLdtList  ) 
+	{
+		final String meth = "loadFullLDT()";
+		console.debug("ENTER<%s:%s> NS(%s) Set(%s) Key(%s)", CLASSNAME,
+				meth, key.namespace, key.setName, key.userKey.toString());
+		
+		console.debug("DEBUG: << FULL LDT >> " + fullLdtList.toString());
+
+		try {		
+			String siteListBin = sve.getLdtBinName();
+
+			// Initialize Large LIST operator.
+			com.aerospike.client.large.LargeList llist = 
+				client.getLargeList(this.ldtPolicy, key, siteListBin, CM_LLIST_MOD);
+
+			for (Map<String,Object> mapItem : fullLdtList ){
+				llist.add( Value.getAsMap(mapItem));
+			// Package up the Map Object and add it to the LLIST.  Note that the
+			// "Value.get()" operation is NOT used.  Instead it's Value.getAsList().
+//			llist.add(fullLdtList);
+			}
+
+		} catch (AerospikeException ae) {
+
+			console.error("Aerospike Error Code(%d) Error Message(%s)",
+					ae.getResultCode(), ae.getMessage());
 			return( -2 );
 		} catch (Exception e){
 			e.printStackTrace();
@@ -123,13 +208,17 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 	 * @param params
 	 */
 	public void processNewSiteVisit( JSONObject commandObj, String ns  ) {
+		final String meth="processNewSiteVisit()";
 		console.debug("ENTER ProcessNewSiteVisit:");
 		
 		SiteVisitEntry sve = 
 				new SiteVisitEntry(console, commandObj, ns, 0, LDT_BIN );
 
 		try {
-			sve.toStorage(client, ns, this);		
+			sve.toStorage(client, ns, sve.getCustomerBaseSet(), this);		
+		} catch (AerospikeException ae) {
+			console.error("<%s:%s>Aerospike Error Code(%d) Error Message(%s)",
+					CLASSNAME, meth, ae.getResultCode(), ae.getMessage());
 		} catch (Exception e){
 			e.printStackTrace();
 			System.out.println("Process New Site Visit Exception: " + e);
@@ -149,8 +238,9 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 	public List<Map<String,Object>> 
 	processSiteQuery( String ns, String set, String key ) 
 	{
-		console.debug("ENTER ProcessSiteQuery: NS(%s), Set(%s) Key(%s)",
-				ns, set, key);
+		final String meth = "processSiteQuery()";
+		console.debug("ENTER<%s:%s> NS(%s), Set(%s) Key(%s)",
+				CLASSNAME, meth, ns, set, key);
 		
 		List<Map<String,Object>> scanList = null;
 
@@ -160,7 +250,7 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, userKey, siteListBin, null);
+					client.getLargeList(this.ldtPolicy, userKey, siteListBin, null);
 
 			// Perform a Scan on all of the Site Visit Objects
 			scanList =  (List<Map<String,Object>>) llist.scan();
@@ -172,7 +262,8 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 
 		} catch (Exception e){
 			e.printStackTrace();
-			console.warn("Process Site Query Exception: " + e);
+			console.warn("<%s:%s> Site Query Exception(%s)",
+					CLASSNAME, meth, e.toString());
 		}
 		console.debug("Done with Site Query");
 		
@@ -186,10 +277,12 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 	 * @param params
 	 */
 	@SuppressWarnings("unchecked")
-	public List<Map<String,Object>> scanLDT( String ns, String set, Key userKey ) 
+	public List<Map<String,Object>> scanLDT( Key key ) 
 	throws AerospikeException
 	{
-		console.debug("ENTER ScanLDT: NS(%s), Set(%s)", ns, set );
+		final String meth = "scanLDT()";
+		console.debug("ENTER<%s:%s> NS(%s), Set(%s)", 
+				CLASSNAME, meth, key.namespace, key.setName );
 		
 		List<Map<String,Object>> scanList = null;
 
@@ -198,20 +291,22 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, userKey, siteListBin, null);
+					client.getLargeList(this.ldtPolicy, key, siteListBin, null);
 
 			// Perform a Scan on all of the Site Visit Objects
 			scanList =  (List<Map<String,Object>>) llist.scan();
 			if( console.debugIsOn() && scanList != null ) {
 				for (Map<String,Object> mapItem : scanList) {
-					console.debug("ScanList Map Item" + mapItem );
+					console.debug("ScanList Map Item:" + mapItem.toString() );
 				}
 			}
 		} catch (AerospikeException ae) {
+			console.error("<%s:%s> Aerospike Error Code(%d) Error Message(%s)",
+					CLASSNAME, meth, ae.getResultCode(), ae.getMessage());
 			throw new AerospikeException(ae);
 		} catch (Exception e){
 			e.printStackTrace();
-			console.warn("ScanLDT Exception: " + e);
+			console.warn("ScanLDT Exception: " + e.toString());
 		}
 		console.debug("Done with ScanLDT");
 		
@@ -229,7 +324,8 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 	 * @param params
 	 */
 	public void processRemoveExpired( String ns, String set, Key key, long expire ) {
-		console.debug("ENTER ProcessRemoveExpired");
+		final String meth = "processRemoveExpired()";
+		console.debug("ENTER<%s:%s>", CLASSNAME, meth);
 		List<Map<String,Object>> scanList = null;
 
 		try {
@@ -237,7 +333,7 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 
 			// Initialize large List operator.
 			com.aerospike.client.large.LargeList llist = 
-					client.getLargeList(this.policy, key, ldtBin, null);
+					client.getLargeList(this.ldtPolicy, key, ldtBin, null);
 
 			// Perform a Range Query -- from "MIN" to "EXPIRE"
 			Value minValue = new Value.NullValue();
@@ -259,7 +355,9 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 					llist.remove(Value.getAsMap(mapItem));
 				}
 			} catch (AerospikeException ae) {
-				// Ignore Aerospike Exception
+				// Ignore Aerospike Exception unless debug mode
+				console.debug("<%s:%s> Aerospike Error Code(%d) Error Message(%s)",
+						CLASSNAME, meth, ae.getResultCode(), ae.getMessage());
 				
 			}
 			

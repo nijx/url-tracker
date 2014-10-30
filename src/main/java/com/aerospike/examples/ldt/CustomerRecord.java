@@ -38,7 +38,11 @@ public class CustomerRecord implements IDbRecord {
 	private String customerName;
 	private String contactName;
 	private String customerID;
+	private String customerBaseSet;
+	private String customerCacheSet;
 	private int    index;
+	// We will use default values for Customer Records, so no special
+	// policy is needed here.
 	private WritePolicy writePolicy = new WritePolicy();
 	private Policy policy = new Policy();
 	
@@ -51,12 +55,15 @@ public class CustomerRecord implements IDbRecord {
 		
 		String name = String.format("CustName(%d)", seed);
 		String id = String.format("CustID(%d)", seed);
+		String segmentID = String.format("SegmentCustID(%d)", seed);
 		String contact = String.format("Contact(%d)", seed);
 		
 		this.console = console;
 		this.customerName = name;
 		this.contactName = contact;
-		this.customerID = id; // doubles as the AS Set Name
+		this.customerID = id; 
+		this.customerBaseSet = id; // doubles as the AS Set Name
+		this.customerCacheSet = id  + ":cache";
 		this.index = (int) seed; // a fake number to help with generation
 	}
 	
@@ -77,6 +84,8 @@ public class CustomerRecord implements IDbRecord {
 		this.customerName = customerStr;
 		this.contactName = contactStr;
 		this.customerID = custID; // doubles as the AS Set Name
+		this.customerBaseSet = custID; // doubles as the AS Set Name
+		this.customerCacheSet = custID  + ":cache";
 		this.index = seed; // a fake number to help with generation
 	}
 	
@@ -96,6 +105,8 @@ public class CustomerRecord implements IDbRecord {
 		this.customerName = name;
 		this.contactName = contact;
 		this.customerID = id; // doubles as the AS Set Name
+		this.customerBaseSet = id; // doubles as the AS Set Name
+		this.customerCacheSet = id  + ":cache";
 		this.index = index; // a fake number to help with generation
 	}
 
@@ -188,14 +199,10 @@ public class CustomerRecord implements IDbRecord {
 	 * @return
 	 * @throws Exception
 	 */
-	public Record  remove(AerospikeClient client, String namespace) 
+	public Record  remove(AerospikeClient client, String namespace, String setName) 
 			throws Exception 
 	{
 		Record record = null;
-
-		// A slightly strange case where the customerID is BOTH the set name
-		// and the Key for the customer record.
-		String setName = this.customerID;
 		String recordKey = this.customerID;
 		
 		try {
@@ -260,6 +267,24 @@ public class CustomerRecord implements IDbRecord {
 	public void setIndex(int index) {
 		this.index = index;
 	}
+
+	public String getCustomerBaseSet() {
+		return customerBaseSet;
+	}
+
+	public void setCustomerBaseSet(String customerBaseSet) {
+		this.customerBaseSet = customerBaseSet;
+	}
+
+	public String getCustomerCacheSet() {
+		return customerCacheSet;
+	}
+
+	public void setCustomerCacheSet(String customerCacheSet) {
+		this.customerCacheSet = customerCacheSet;
+	}
+	
+	
 	
 	
 }
