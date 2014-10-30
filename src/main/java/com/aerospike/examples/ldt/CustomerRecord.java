@@ -284,7 +284,4 @@ public class CustomerRecord implements IDbRecord {
 		this.customerCacheSet = customerCacheSet;
 	}
 	
-	
-	
-	
 }

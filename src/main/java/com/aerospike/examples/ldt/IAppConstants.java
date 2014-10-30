@@ -35,7 +35,8 @@ public interface IAppConstants {
 	// The LDT Bin we'll use for SiteVisit Objects
 	public static final String LDT_BIN      = "LDT BIN";
 	
-	// Cache Record TTL Value
+	// Cache Record TTL Value (Note that currently we must use the Default TTL
+	// that is set on the Namespace -- so this value is not used.
 //	public static final int    CACHE_TTL    = 300;  // 5 minutes (for testing)
 	public static final int    CACHE_TTL    = 86400; // Expires in one day.
 	

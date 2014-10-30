@@ -39,8 +39,6 @@ public class SiteVisitEntry {
 	private long timeToLive;
 	private int    index;
 	private String ldtBinName;
-//	private WritePolicy writePolicy = new WritePolicy();
-//	private Policy policy = new Policy();
 	
 	static final String CLASSNAME = "SiteVisitEntry";
 	
@@ -260,12 +258,6 @@ public class SiteVisitEntry {
 			Key baseKey = new Key(baseNamespace, baseSetName, recordKeyString);
 			Key cacheKey = new Key(cacheNamespace, cacheSetName, recordKeyString);
 			
-			console.info("CCCCCCCCCCCCCCCCCCC Reload Cache LDT CCCCCCCCCCCCCCCCCCCCCCC");
-			console.info("Base LDT: namespace(%s) set(%s) key(%s)",
-					baseKey.namespace, baseKey.setName, baseKey.userKey);
-			console.info("Cache LDT: namespace=%s set=%s key=%s", 
-					cacheKey.namespace, cacheKey.setName, cacheKey.userKey);
-			
 			try {
 				sizeCheck = ldtOps.ldtSize(baseKey, ldtBinName);
 			} catch (AerospikeException ae) {
@@ -299,6 +291,15 @@ public class SiteVisitEntry {
 					console.error("<%s:%s> Write Problem Loading LDT: RC(%d) namespace=%s set=%s key=%s", 
 						CLASSNAME, meth, writeResult, 
 						cacheKey.namespace, cacheKey.setName, cacheKey.userKey);
+				}
+				// Print a status line each time we reload a cache record, but
+				// only for those records AFTER the first one
+				if (sizeCheck > 1) {
+					console.info("CCCCCCCCCCCCCCCCCCC Reload Cache LDT CCCCCCCCCCCCCCCCCCCCCCC");
+					console.info("Base LDT: namespace(%s) set(%s) key(%s)",
+							baseKey.namespace, baseKey.setName, baseKey.userKey);
+					console.info("Cache LDT: namespace(%s) set(%s) key(%s)", 
+							cacheKey.namespace, cacheKey.setName, cacheKey.userKey);
 				}
 			}
 		} catch (Exception e){
@@ -379,22 +380,6 @@ public class SiteVisitEntry {
 	public void setIndex(int index) {
 		this.index = index;
 	}
-
-//	public WritePolicy getWritePolicy() {
-//		return writePolicy;
-//	}
-//
-//	public void setWritePolicy(WritePolicy writePolicy) {
-//		this.writePolicy = writePolicy;
-//	}
-//
-//	public Policy getPolicy() {
-//		return policy;
-//	}
-//
-//	public void setPolicy(Policy policy) {
-//		this.policy = policy;
-//	}
 
 	public String getLdtBinName() {
 		return ldtBinName;

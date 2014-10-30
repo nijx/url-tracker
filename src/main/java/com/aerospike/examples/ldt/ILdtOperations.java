@@ -53,17 +53,6 @@ public interface ILdtOperations {
 	public int storeSiteObject(SiteVisitEntry sve, String ns, String set,
 			Map<String,Object> siteObjMap);
 	
-//	/**
-//	 * Store a Site Object into the LDT -- in the Cache Customer Set.
-//	 * @param sve
-//	 * @param namespace
-//	 * @param siteObjMap
-//	 * @return
-//	 */
-//	public int storeCachedSiteObject(SiteVisitEntry sve, String namespace,
-//			Map<String,Object> siteObjMap  );
-	
-	
 	/**
 	 * Load up an entire LDT in the Segmented Cache with a Multi-Write.
 	 * @param sve

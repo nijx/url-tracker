@@ -37,7 +37,7 @@ public class UserRecord implements IDbRecord, IAppConstants {
 	private String customerCacheSet;
 	private int    index;
 	private DbOps dbOps;
-	private WritePolicy writePolicy;
+	private WritePolicy writePolicy; // Cache the write policies from DbOps
 	private WritePolicy cacheWritePolicy;
 	private Policy policy;
 

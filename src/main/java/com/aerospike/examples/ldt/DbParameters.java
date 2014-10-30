@@ -111,8 +111,4 @@ public class DbParameters {
 	public void setCacheNamespace(String cacheNamespace) {
 		this.cacheNamespace = cacheNamespace;
 	}
-	
-	
-
-
 }

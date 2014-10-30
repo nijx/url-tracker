@@ -165,15 +165,16 @@ public class EmulateUser implements Runnable, IAppConstants {
 			String keyStr = userRec.getUserID();
 
 			// At predetermined milestones, perform various actions 
-			// Show Simple Status at regular internals
-			if( (opNum + threadNumber) % 2000 == 0 ) {
+			// Show Simple Status at regular internals.  For the regular large
+			// scale tests with 100 threads, we won't hit this very often.
+			if( (opNum + threadNumber) % 1000 == 0 ) {
 				console.info("<%s:%s> Thread(%d) Cust#(%d) BaseSet(%s) User#(%d) UserID(%s) Iteration(%d)",
 						CLASSNAME, meth, threadNumber, customerSeed, baseSet, 
 						userSeed, keyStr, opNum);
 			}
 			
 			// Do a heavy duty scan less frequently.
-			if( (opNum + threadNumber) % 4000 == 0 ) {
+			if( (opNum + threadNumber) % 2000 == 0 ) {
 				Key baseKey = new Key(baseNamespace, baseSet, keyStr);
 				Key cacheKey = new Key(cacheNamespace, cacheSet, keyStr);
 				
@@ -185,16 +186,31 @@ public class EmulateUser implements Runnable, IAppConstants {
 				List<Map<String,Object>> baseResult = null;
 				List<Map<String,Object>> cacheResult = null;
 				int baseResultSize = 0;
+				int baseCheckSize = 0;
 				int cacheResultSize = 0;
+				int cacheCheckSize = 0;
 				
 				try {
 					baseResult = ldtOps.scanLDT(baseKey);
 					cacheResult = ldtOps.scanLDT(cacheKey);
+					cacheCheckSize = ldtOps.ldtSize(cacheKey, LDT_BIN);
 					if (baseResult != null) {
 						baseResultSize = baseResult.size();
+						baseCheckSize = ldtOps.ldtSize(baseKey, LDT_BIN);
+						if (baseResultSize != baseCheckSize) {
+							console.error("<%s:%s> <<BASE SCAN Size Error>> Thread(%d) Cust#(%d) BaseSet(%s) UserID(%s) ScanSide(%d) LDT Size(%d)",
+									CLASSNAME, meth, threadNumber, customerSeed, baseSet, 
+									keyStr, baseResultSize, baseCheckSize);
+						}
 					} 
 					if (cacheResult != null) {
 						cacheResultSize = cacheResult.size();
+						cacheCheckSize = ldtOps.ldtSize(cacheKey, LDT_BIN);
+						if (cacheResultSize != cacheCheckSize) {
+							console.error("<%s:%s> <<CACHE SCAN Size Error>> Thread(%d) Cust#(%d) CacheSet(%s) UserID(%s) ScanSide(%d) LDT Size(%d)",
+									CLASSNAME, meth, threadNumber, customerSeed, cacheSet, 
+									keyStr, cacheResultSize, cacheCheckSize);
+						}
 					}
 				} catch (AerospikeException ae){
 					console.error("Aerospike Error Code(%d) Error Message(%s)",
@@ -204,13 +220,7 @@ public class EmulateUser implements Runnable, IAppConstants {
 				console.info("<%s:%s> <<SCAN RESULT>> Thread(%d) Cust#(%d) BaseSet(%s) CacheSet(%s) UserID(%s) BaseLDT(%d) CacheLDT(%d)",
 						CLASSNAME, meth, threadNumber, customerSeed, baseSet, 
 						cacheSet, keyStr, baseResultSize, cacheResultSize);
-
 			}
-			//		if( i % 2000 == 0 ) {
-			//			console.info("ThreadNum(%d) QUERY: Stored Cust#(%d) CustID(%s) User#(%d) UserID(%s) Iteration(%d)",
-			//					threadNumber, customerSeed, set, userSeed, keyStr, i);
-			//			dbOps.printSiteVisitContents(set, keyStr);
-			//		}
 		} catch (AerospikeException ae) {
 			console.error("Aerospike Error Code(%d) Error Message(%s)",
 					ae.getResultCode(), ae.getMessage());
@@ -218,8 +228,7 @@ public class EmulateUser implements Runnable, IAppConstants {
 			e.printStackTrace();
 			console.error("[%s] Problem with Thread(%d) Customer Record: Seed(%d)", 
 					"Emulate: doOperation(): ", threadNumber, opNum);
-		}
-		
+		}	
 	}
 
 	/**

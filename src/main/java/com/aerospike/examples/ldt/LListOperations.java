@@ -180,12 +180,15 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 			com.aerospike.client.large.LargeList llist = 
 				client.getLargeList(this.ldtPolicy, key, siteListBin, CM_LLIST_MOD);
 
+			// For now -- add the elements individually -- but when all other
+			// things are stable, switch to using a "add_all()" that writes
+			// the entire scanned list in one shot.
 			for (Map<String,Object> mapItem : fullLdtList ){
 				llist.add( Value.getAsMap(mapItem));
-			// Package up the Map Object and add it to the LLIST.  Note that the
-			// "Value.get()" operation is NOT used.  Instead it's Value.getAsList().
-//			llist.add(fullLdtList);
 			}
+			// When we're ready -- switch this to a write_all version, rather
+			// than the individual element write (above).
+//			llist.add(fullLdtList);
 
 		} catch (AerospikeException ae) {
 
@@ -198,7 +201,7 @@ public class LListOperations implements ILdtOperations, IAppConstants {
 			return( -1 );
 		}
 		return(0);
-	} // end storeSiteObject()
+	} // end loadFullLDT()
 
 
 	/**

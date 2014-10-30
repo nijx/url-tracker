@@ -38,8 +38,8 @@ public class ProcessCommands implements IAppConstants {
 	
 	// Constants for Customer Emulation Mode.
 	/** Expected number of User Generated Transactions per second.  */
-//	final int USER_TPS = 1500;
-	final int USER_TPS = 400;
+	final int USER_TPS = 1500;
+//	final int USER_TPS = 400;
 	
 	/** Expected Clean Cycle, in seconds */
 //	final long CLEAN_CYCLE = 86400; // One days worth of seconds

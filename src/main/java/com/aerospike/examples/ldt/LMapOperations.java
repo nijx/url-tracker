@@ -37,14 +37,6 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 	protected Console console;
 	
 	static final String CLASSNAME = "LMapOperations";
-	
-//	// For the sake of this example, we are hardcoding the path of the UDF
-//	// that we'll be using in the LMAP Scan Filter example.
-//	private String serverUdfPath = "lmap_scan_filter.lua";
-//	private String clientUdfPath = "udf/lmap_scan_filter.lua";
-////	private String serverUdfPath = "udflib .lua";
-////	private String clientUdfPath = "udf/udflib.lua";
-//	private String udfFilter     = "expire_filter";
 
 	/**
 	 * Constructor for LMAP OPERATION class.
@@ -66,12 +58,7 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 	 * once before we start the regular operations.
 	 */
 	public void setup() {
-//		try {
-//		registerFilterUDF(clientUdfPath, serverUdfPath );
-//		} catch (Exception e){
-//			e.printStackTrace();
-//			console.error("Error Registering UDF: " + e );
-//		}
+		// Do nothing for now.  Employ UDF Filters later.
 	} // end setup()
 	
 	/**
@@ -181,48 +168,6 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 		return(0);
 	} // end storeSiteObject()
 	
-//	/**
-//	 * Store a Site Object into the LDT -- in the Cache Customer Set.
-//	 * @param sve
-//	 * @param namespace
-//	 * @param siteObjMap
-//	 * @return
-//	 */
-//	public int storeCachedSiteObject(SiteVisitEntry sve, String namespace,
-//			Map<String,Object> siteObjMap  ) 
-//	{
-//		console.debug("ENTER storeObject:");
-//
-//		// The Customer ID (custID) is the Aerospike SET name, and userID is the
-//		// key for the record (the user data and the site visit list).
-//		String userID = (String) sve.getUserID();
-//		String customerCacheSet = (String) sve.getCustomerCacheSet();
-//		
-//		try {
-//
-//			Key userKey = new Key(namespace, customerCacheSet, userID);
-//			String ldtBin = LDT_BIN;
-//
-//			// Initialize large MAP operator.
-//			com.aerospike.client.large.LargeMap lmap = 
-//					client.getLargeMap(this.policy, userKey, ldtBin,
-//							CM_LMAP_MOD);
-//
-//			// Package up the Map Object and add it to the LMAP.  Note that the
-//			// "Value.get()" operation is NOT used.  Instead it's Value.getAsMap().
-//			lmap.put(Value.get(sve.getExpire()), Value.getAsMap(siteObjMap));			
-//
-//		} catch (AerospikeException ae) {
-//			console.debug("DB Error:  Retry");
-//			return( -2 );
-//		} catch (Exception e){
-//			e.printStackTrace();
-//			System.out.println("Store Site Visit Exception: " + e);
-//			return( -1 );
-//		}
-//		return(0);
-//	}
-	
 	/**
 	 * Load up an entire LDT in the Segmented Cache with a Multi-Write.
 	 * @param sve
@@ -262,7 +207,7 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 				expireTime = (Long) mapItem.get("key");
 				fullLdtMap.put(expireTime, mapItem);
 			}
-			
+			// Do a "one shot" write of the full map.
 			lmap.put(fullLdtMap);
 
 		} catch (AerospikeException ae) {
@@ -276,7 +221,7 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 		}
 		return(0);
 		
-	}
+	} // end loadFullLDT()
 	
 	/**
 	 * Enter a new Site Visit object in the collection of site visits for
@@ -456,25 +401,6 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 		}
 		console.debug("Done with Remove Expired");
 	} // processRemoveExpired()
-	
-//	/**
-//	 * Register the Filter UDF for our LMAP Scan.
-//	 * 
-//	 * Here's the Aerospike Definition
-//	 * public class AerospikeClient { 
-//	 *   public final RegisterTask register( Policy ldtPolicy, String clientPath, 
-//	 *                String serverPath, Language language ) 
-//	 *                throws AerospikeException }
-//	 * 
-//	 * @param clientPath : String showing path to the UDF on the client side
-//	 * @param serverPath : String showing path to the UDF on the server side
-//	 * @throws Exception
-//	 */
-//	private void registerFilterUDF(String clientPath, String serverPath) throws Exception {
-//		RegisterTask task = client.register(this.policy,
-//				clientPath, serverPath, Language.LUA);
-//		task.waitTillComplete();
-//	} // end registerUDF()
 
 
 } // end class LMapOperations
