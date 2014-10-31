@@ -282,7 +282,7 @@ public class SiteVisitEntry {
 					console.error("<%s:%s> << SIZE MISMATCH: LDT Size(%d); Scan Size(%d) >>",
 							CLASSNAME, meth, sizeCheck, scanSize);
 				} else {
-					console.info("<%s:%s> : LDT Size(%d); Scan Size(%d) >>",
+					console.debug("<%s:%s> : LDT Size(%d); Scan Size(%d) >>",
 							CLASSNAME, meth, sizeCheck, scanSize);
 				}
 
@@ -295,7 +295,7 @@ public class SiteVisitEntry {
 				// Print a status line each time we reload a cache record, but
 				// only for those records AFTER the first one
 				if (sizeCheck > 1) {
-					console.info("CCCCCCCCCCCCCCCCCCC Reload Cache LDT CCCCCCCCCCCCCCCCCCCCCCC");
+					console.info("<<<  CCCCCCCCCCCCCCCCC Reload Cache LDT CCCCCCCCCCCCCCCCCCCCCC >>>");
 					console.info("Base LDT: namespace(%s) set(%s) key(%s)",
 							baseKey.namespace, baseKey.setName, baseKey.userKey);
 					console.info("Cache LDT: namespace(%s) set(%s) key(%s)", 
