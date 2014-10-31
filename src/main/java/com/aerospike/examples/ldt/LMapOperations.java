@@ -187,7 +187,7 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 			console.info("DEBUG: << FULL LDT LIST IS NULL >> !!!");
 			return( -1 );
 		}
-		console.info("DEBUG: << FULL LDT >> " + fullLdtList.toString());
+		console.debug("DEBUG: << FULL LDT >> " + fullLdtList.toString());
 		
 		try {		
 			String siteListBin = sve.getLdtBinName();
@@ -318,7 +318,7 @@ public class LMapOperations implements ILdtOperations, IAppConstants {
 					(Map<Long, Map<String,Object>>) lmap.scan();
 			if (mapResult != null) {
 				
-				console.info("LMAP SCAN: results(%s)", mapResult.toString());
+				console.debug("LMAP SCAN: results(%s)", mapResult.toString());
 				
 				for (Entry<Long,Map<String,Object>> entry : mapResult.entrySet() ){
 					Long expireValue = (Long) entry.getKey();
