@@ -295,7 +295,7 @@ public class SiteVisitEntry {
 				// Print a status line each time we reload a cache record, but
 				// only for those records AFTER the first one
 				if (sizeCheck > 1) {
-					console.info("<<<  CCCCCCCCCCCCCCCCC Reload Cache LDT CCCCCCCCCCCCCCCCCCCCCC >>>");
+					console.info("<<<  CCCCCCCCCCC Reload Cache LDT CCCCCCC Size(%d) CCCCCCCCCCC >>>", sizeCheck);
 					console.info("Base LDT: namespace(%s) set(%s) key(%s)",
 							baseKey.namespace, baseKey.setName, baseKey.userKey);
 					console.info("Cache LDT: namespace(%s) set(%s) key(%s)", 
