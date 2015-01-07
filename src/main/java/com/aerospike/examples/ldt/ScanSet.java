@@ -49,7 +49,7 @@ public class ScanSet implements ScanCallback {
 	public List<Record> runScan(AerospikeClient client, String namespace, String set) 
 			throws Exception 
 	{
-		console.info("Scan parallel: namespace=" + namespace + " set=" + set);
+		console.debug("Scan parallel: namespace=" + namespace + " set=" + set);
 		recordCount = 0;
 		long begin = System.currentTimeMillis();
 		ScanPolicy policy = new ScanPolicy();
@@ -57,10 +57,10 @@ public class ScanSet implements ScanCallback {
 
 		long end = System.currentTimeMillis();
 		double seconds =  (double)(end - begin) / 1000.0;
-		console.info("Total records returned: " + recordCount);
-		console.info("Elapsed time: " + seconds + " seconds");
+		console.debug("Total records returned: " + recordCount);
+		console.debug("Elapsed time: " + seconds + " seconds");
 		double performance = Math.round((double)recordCount / seconds);
-		console.info("Records/second: " + performance);
+		console.debug("Records/second: " + performance);
 		return recordList;
 	} // end runScan()
 
@@ -76,11 +76,11 @@ public class ScanSet implements ScanCallback {
 	public void scanCallback(Key key, Record record) {
 		recordCount++;
 		
-		console.info("Found Record: Key("+key+") Record(" + record + ")");
+		console.debug("Found Record: Key("+key+") Record(" + record + ")");
 		recordList.add(record);
 
 		if ((recordCount % 10000) == 0) {
-			console.info("Records " + recordCount);
+			console.debug("Records " + recordCount);
 		}
 	} // end scanCallback()
 	

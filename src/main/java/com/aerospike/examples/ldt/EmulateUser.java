@@ -168,7 +168,7 @@ public class EmulateUser implements Runnable, IAppConstants {
 			// Show Simple Status at regular internals.  For the regular large
 			// scale tests with 100 threads, we won't hit this very often.
 			if( (opNum + threadNumber) % 1000 == 0 ) {
-				console.info("<%s:%s> Thread(%d) Cust#(%d) BaseSet(%s) User#(%d) UserID(%s) Iteration(%d)",
+				console.debug("<%s:%s> Thread(%d) Cust#(%d) BaseSet(%s) User#(%d) UserID(%s) Iteration(%d)",
 						CLASSNAME, meth, threadNumber, customerSeed, baseSet, 
 						userSeed, keyStr, opNum);
 			}
@@ -178,7 +178,7 @@ public class EmulateUser implements Runnable, IAppConstants {
 				Key baseKey = new Key(baseNamespace, baseSet, keyStr);
 				Key cacheKey = new Key(cacheNamespace, cacheSet, keyStr);
 				
-				console.info("<%s:%s> <<SCAN TEST>> Thread(%d) Cust#(%d) BaseSet(%s) CacheSet(%s) User#(%d) UserID(%s) Iteration(%d)",
+				console.debug("<%s:%s> <<SCAN TEST>> Thread(%d) Cust#(%d) BaseSet(%s) CacheSet(%s) User#(%d) UserID(%s) Iteration(%d)",
 						CLASSNAME, meth, threadNumber, customerSeed, baseSet, 
 						cacheSet, userSeed, keyStr, opNum);
 				
@@ -217,7 +217,7 @@ public class EmulateUser implements Runnable, IAppConstants {
 							ae.getResultCode(), ae.getMessage());
 					console.info("Keep on Truckin");
 				}
-				console.info("<%s:%s> <<SCAN RESULT>> Thread(%d) Cust#(%d) BaseSet(%s) CacheSet(%s) UserID(%s) BaseLDT(%d) CacheLDT(%d)",
+				console.debug("<%s:%s> <<SCAN RESULT>> Thread(%d) Cust#(%d) BaseSet(%s) CacheSet(%s) UserID(%s) BaseLDT(%d) CacheLDT(%d)",
 						CLASSNAME, meth, threadNumber, customerSeed, baseSet, 
 						cacheSet, keyStr, baseResultSize, cacheResultSize);
 			}
@@ -240,7 +240,7 @@ public class EmulateUser implements Runnable, IAppConstants {
 		ILdtOperations ldtOps = dbOps.getLdtOps();
 		
 		long startTimeMs = System.currentTimeMillis();
-		long endTimeMS = startTimeMs * 1000 * emulationDays * 86400;
+		long endTimeMS = startTimeMs + 1000 * emulationDays * 86400;
 		long checkTimeMS = 0;
 		long secondStartMS = 0;
 		long deltaTimeMS = 0;
